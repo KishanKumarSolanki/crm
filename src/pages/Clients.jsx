@@ -1,591 +1,1079 @@
 import { useEffect, useState } from "react"
+
 import readXlsxFile from "read-excel-file/browser"
+
 import { supabase } from "../lib/supabase"
+
 import { sendClientWelcomeEmail } from "../lib/email"
+
 import { Link } from "react-router-dom"
 
+
+
 export default function Clients() {
+
   const [clients, setClients] = useState([])
+
   const [name, setName] = useState("")
+
   const [email, setEmail] = useState("")
+
   const [company, setCompany] = useState("")
 
+
+
   const [loading, setLoading] = useState(false)
+
   const [importing, setImporting] = useState(false)
+
   const [search, setSearch] = useState("")
+
   const [stageFilter, setStageFilter] = useState("all")
 
+
+
   // =========================
+
   // FETCH CLIENTS
+
   // =========================
+
+
 
   const fetchClients = async () => {
+
     const { data, error } = await supabase
+
       .from("clients")
+
       .select("*")
+
       .order("created_at", { ascending: false })
 
+
+
     if (!error) {
+
       setClients(data || [])
+
     } else {
+
       console.error(error)
+
     }
+
   }
 
+
+
   useEffect(() => {
+
     fetchClients()
+
   }, [])
 
-  // =========================
-  // ADD CLIENT WITH AUTOMATION
+
+
   // =========================
 
+  // ADD CLIENT WITH AUTOMATION
+
+  // =========================
+
+
+
   const addClient = async () => {
+
     if (!name.trim() || !email.trim()) {
+
       alert("Name & Email required")
+
       return
+
     }
+
+
 
     setLoading(true)
 
+
+
     try {
+
       // Auto assign
+
       const team = ["member1", "member2", "member3"]
 
+
+
       const randomMember =
+
         team[Math.floor(Math.random() * team.length)]
 
+
+
       // Insert client
+
       const { data, error } = await supabase
+
         .from("clients")
+
         .insert([
+
           {
+
             name: name.trim(),
+
             email: email.trim(),
+
             company: company.trim(),
+
             assigned_to: randomMember,
+
             stage: "discovery",
+
           },
+
         ])
+
         .select()
+
+
 
       if (error) throw error
 
+
+
       const newClient = data[0]
+
+
 
       let welcomeEmailError
 
+
+
       // Create follow-up task
+
       const { error: taskError } = await supabase
+
         .from("tasks")
+
         .insert([
+
           {
+
             client_id: newClient.id,
+
             title: "Follow up with client",
+
             due_date: new Date(Date.now() + 86400000),
+
             status: "pending",
+
           },
+
         ])
+
+
 
       if (taskError) {
+
         console.error("Task error:", taskError)
+
       }
+
+
 
       // Activity log
+
       const { error: activityError } = await supabase
+
         .from("activities")
+
         .insert([
+
           {
+
             client_id: newClient.id,
+
             type: "created",
+
             description: `Client created and assigned to ${randomMember}`,
+
           },
+
         ])
 
+
+
       if (activityError) {
+
         console.error("Activity error:", activityError)
+
       }
+
+
 
       try {
+
         await sendClientWelcomeEmail({
+
           email: newClient.email,
+
           name: newClient.name,
+
           company: newClient.company,
+
         })
+
       } catch (error) {
+
         console.error("Welcome email error:", error)
+
         welcomeEmailError = error
+
       }
 
+
+
       // Reset
+
       setName("")
+
       setEmail("")
+
       setCompany("")
+
+
 
       await fetchClients()
 
+
+
       if (welcomeEmailError) {
+
         const message = welcomeEmailError instanceof Error
+
           ? welcomeEmailError.message
+
           : "Unknown email delivery error"
+
         alert(`Client added, but the welcome email could not be sent: ${message}`)
+
       } else {
+
         alert("Client added and welcome email sent")
+
       }
+
     } catch (err) {
+
       alert(err.message)
+
     }
 
+
+
     setLoading(false)
+
   }
 
+
+
   const importClientsFromExcel = async (event) => {
+
     const file = event.target.files?.[0]
+
     event.target.value = ""
+
     if (!file) return
+
+
 
     setImporting(true)
 
+
+
     try {
+
       const rows = await readXlsxFile(file)
+
       if (rows.length < 2) {
+
         throw new Error("Workbook needs a header row and at least one client row.")
+
       }
+
+
 
       const normalizeHeader = (value) =>
+
         String(value ?? "").toLowerCase().replace(/[^a-z]/g, "")
+
       const headers = rows[0].map(normalizeHeader)
+
       const nameIndex = headers.findIndex((header) =>
+
         ["name", "clientname", "fullname"].includes(header)
+
       )
+
       const emailIndex = headers.findIndex((header) => header === "email")
+
       const companyIndex = headers.findIndex((header) =>
+
         ["company", "companyname", "organization"].includes(header)
+
       )
+
+
 
       if (nameIndex < 0 || emailIndex < 0) {
+
         throw new Error(
+
           "Excel headers must include Name and Email. Company is optional."
+
         )
+
       }
+
+
 
       const importedRows = rows.slice(1)
+
         .filter((row) => row.some((value) => String(value ?? "").trim()))
+
         .map((row, index) => ({
+
           rowNumber: index + 2,
+
           name: String(row[nameIndex] ?? "").trim(),
+
           email: String(row[emailIndex] ?? "").trim(),
+
           company: companyIndex < 0
+
             ? ""
+
             : String(row[companyIndex] ?? "").trim(),
+
         }))
 
+
+
       if (!importedRows.length) {
+
         throw new Error("No client rows were found in this workbook.")
+
       }
 
+
+
       const knownEmails = new Set(
+
         clients.map((client) => client.email?.trim().toLowerCase()).filter(Boolean)
+
       )
+
       const workbookEmails = new Set()
+
       let added = 0
+
       let skipped = 0
+
       let failed = 0
+
       let emailFailures = 0
+
       const failureDetails = []
 
+
+
       for (const row of importedRows) {
+
         const normalizedEmail = row.email.toLowerCase()
+
         if (
+
           !row.name ||
+
           !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email) ||
+
           knownEmails.has(normalizedEmail) ||
+
           workbookEmails.has(normalizedEmail)
+
         ) {
+
           skipped += 1
+
           continue
+
         }
+
         workbookEmails.add(normalizedEmail)
 
+
+
         const team = ["member1", "member2", "member3"]
+
         const assignedTo = team[Math.floor(Math.random() * team.length)]
 
+
+
         try {
+
           const { data: newClient, error } = await supabase
+
             .from("clients")
+
             .insert({
+
               name: row.name,
+
               email: row.email,
+
               company: row.company,
+
               assigned_to: assignedTo,
+
               stage: "discovery",
+
             })
+
             .select()
+
             .single()
+
+
 
           if (error) throw error
 
+
+
           added += 1
+
           knownEmails.add(normalizedEmail)
 
+
+
           const { error: taskError } = await supabase
+
             .from("tasks")
+
             .insert({
+
               client_id: newClient.id,
+
               title: "Follow up with client",
+
               due_date: new Date(Date.now() + 86400000),
+
               status: "pending",
+
             })
+
           if (taskError) console.error("Imported client task error:", taskError)
 
+
+
           const { error: activityError } = await supabase
+
             .from("activities")
+
             .insert({
+
               client_id: newClient.id,
+
               type: "created",
+
               description: `Client imported and assigned to ${assignedTo}`,
+
             })
+
           if (activityError) console.error("Imported client activity error:", activityError)
 
+
+
           try {
+
             await sendClientWelcomeEmail({
+
               email: newClient.email,
+
               name: newClient.name,
+
               company: newClient.company,
+
             })
+
           } catch (error) {
+
             emailFailures += 1
+
             console.error("Imported client welcome email error:", error)
+
             if (failureDetails.length < 3) {
+
               failureDetails.push(`Email failed for row ${row.rowNumber}`)
+
             }
+
           }
+
         } catch (error) {
+
           failed += 1
+
           console.error(`Client import failed on row ${row.rowNumber}:`, error)
+
           if (failureDetails.length < 3) {
+
             failureDetails.push(`Client row ${row.rowNumber} could not be saved`)
+
           }
+
         }
+
       }
 
+
+
       await fetchClients()
+
       const summary = [
+
         `Clients added: ${added}`,
+
         `Skipped (invalid or duplicate): ${skipped}`,
+
         `Could not save: ${failed}`,
+
         `Welcome emails failed: ${emailFailures}`,
+
       ]
+
       if (failureDetails.length) summary.push(failureDetails.join("\n"))
+
       alert(summary.join("\n"))
+
     } catch (error) {
+
       alert(error instanceof Error ? error.message : "Could not import this Excel file.")
+
     } finally {
+
       setImporting(false)
+
+    }
+
+  }
+
+
+
+  // =========================
+
+  // DELETE CLIENT
+  // =========================
+
+  const handleDeleteClient = async (client) => {
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${client.name}"? This will also delete this client's notes, tasks, and activity history.`
+    )
+
+    if (!confirmed) return
+
+    try {
+      // Remove related records first to avoid foreign-key errors.
+      for (const table of ["notes", "tasks", "activities"]) {
+        const { error } = await supabase
+          .from(table)
+          .delete()
+          .eq("client_id", client.id)
+
+        if (error) throw error
+      }
+
+      const { error } = await supabase
+        .from("clients")
+        .delete()
+        .eq("id", client.id)
+
+      if (error) throw error
+
+      setClients((currentClients) =>
+        currentClients.filter((item) => item.id !== client.id)
+      )
+      alert("Client deleted successfully.")
+    } catch (error) {
+      console.error("Delete client error:", error)
+      alert(`Could not delete client: ${error.message || "Unknown error"}`)
     }
   }
 
+
   // =========================
+
   // ADD NOTE
+
   // =========================
+
+
 
   const addNote = async (clientId, noteText) => {
+
     if (!noteText || !noteText.trim()) return
 
+
+
     const { error } = await supabase
+
       .from("notes")
+
       .insert([
+
         {
+
           client_id: clientId,
+
           note: noteText.trim(),
+
         },
+
       ])
 
+
+
     if (error) {
+
       alert(error.message)
+
       return
+
     }
 
+
+
     alert("Note added")
+
   }
 
+
+
   // =========================
+
   // FILTER CLIENTS
+
   // =========================
+
+
 
   const filteredClients = clients.filter((client) => {
+
     const query = search.toLowerCase().trim()
 
+
+
     const matchesSearch =
+
       !query ||
+
       client.name?.toLowerCase().includes(query) ||
+
       client.email?.toLowerCase().includes(query) ||
+
       client.company?.toLowerCase().includes(query)
 
+
+
     const matchesStage =
+
       stageFilter === "all" ||
+
       client.stage === stageFilter
 
+
+
     return matchesSearch && matchesStage
+
   })
 
+
+
   // =========================
-  // STATS
+
+  // Show at most 10 matching clients; there are no pagination controls.
+  const visibleClients = filteredClients.slice(0, 10)
+
+    // STATS
+
   // =========================
+
+
 
   const totalClients = clients.length
 
+
+
   const discoveryClients = clients.filter(
+
     (client) => client.stage === "discovery"
+
   ).length
+
+
 
   const activeClients = clients.filter(
+
     (client) =>
+
       client.stage === "active" ||
+
       client.stage === "signed"
+
   ).length
+
+
 
   const deliveredClients = clients.filter(
+
     (client) => client.stage === "delivered"
+
   ).length
 
+
+
   // =========================
+
   // STAGE FORMAT
+
   // =========================
+
+
 
   const formatStage = (stage) => {
+
     if (!stage) return "Unknown"
 
+
+
     return stage
+
       .replace("_", " ")
+
       .replace(/\b\w/g, (char) => char.toUpperCase())
+
   }
 
-  const getStageClass = (stage) => {
-    if (stage === "discovery") return "stage-discovery"
-    if (stage === "signed") return "stage-signed"
-    if (stage === "active") return "stage-active"
-    if (stage === "delivered") return "stage-delivered"
 
-    return "stage-default"
+
+  const stageStyles = {
+
+    discovery: { badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
+
+    signed: { badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
+
+    active: { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+
+    delivered: { badge: "bg-green-50 text-green-700", dot: "bg-green-500" },
+
+    default: { badge: "bg-gray-100 text-gray-500", dot: "bg-gray-400" },
+
   }
+
+
+
+  const getStageStyle = (stage) => stageStyles[stage] || stageStyles.default
+
+
 
   // =========================
+
   // MEMBER AVATAR
+
   // =========================
+
+
 
   const getMemberInitial = (member) => {
+
     if (!member) return "U"
 
+
+
     return member
+
       .replace("member", "M")
+
       .charAt(0)
+
       .toUpperCase()
+
   }
 
+
+
+  const card = "rounded-xl border border-gray-200 bg-white shadow-sm"
+
+
+
+  const statCards = [
+
+    { label: "Total Clients", value: totalClients, icon: "◉", color: "bg-violet-50 text-violet-600" },
+
+    { label: "Discovery", value: discoveryClients, icon: "◌", color: "bg-orange-50 text-orange-500" },
+
+    { label: "Active", value: activeClients, icon: "↗", color: "bg-emerald-50 text-emerald-600" },
+
+    { label: "Delivered", value: deliveredClients, icon: "✓", color: "bg-blue-50 text-blue-600" },
+
+  ]
+
+
+
+  const inputWrap =
+
+    "flex h-10 items-center rounded-lg border border-gray-200 bg-white transition focus-within:border-gray-400 focus-within:ring-4 focus-within:ring-gray-900/5"
+
+
+
+  const inputBase =
+
+    "h-full w-full border-none bg-transparent pr-3 text-sm text-gray-700 outline-none placeholder:text-gray-400"
+
+
+
+  const toolbarControl =
+
+    "h-[38px] rounded-lg border border-gray-200 bg-white text-[13px] text-gray-600"
+
+
+
   return (
-    <div className="clients-page">
 
-      {/* =========================
-          HEADER
-      ========================= */}
+    <div className="w-full text-gray-900">
 
-      <div className="page-header">
+
+
+      {/* HEADER */}
+
+      <div className="mb-[22px] flex items-end justify-between max-[768px]:items-start">
 
         <div>
-          <div className="breadcrumb">
-            CRM <span>/</span> Clients
+
+          <div className="mb-2 text-xs text-gray-400">
+
+            CRM <span className="mx-1.5 text-gray-300">/</span> Clients
+
           </div>
 
-          <h1>Clients</h1>
 
-          <p>
+
+          <h1 className="text-[22px] font-bold tracking-tight min-[481px]:text-[28px]">
+
+            Clients
+
+          </h1>
+
+
+
+          <p className="mt-1.5 text-sm text-gray-500">
+
             Manage your clients, pipeline and relationships.
+
           </p>
-        </div>
-
-        <div className="header-count">
-          <span>Total</span>
-          <strong>{totalClients}</strong>
-        </div>
-
-      </div>
-
-
-      {/* =========================
-          STAT CARDS
-      ========================= */}
-
-      <div className="stats-grid">
-
-        <div className="stat-card">
-
-          <div className="stat-icon purple">
-            <span>◉</span>
-          </div>
-
-          <div className="stat-content">
-            <span>Total Clients</span>
-            <strong>{totalClients}</strong>
-          </div>
 
         </div>
 
 
-        <div className="stat-card">
 
-          <div className="stat-icon orange">
-            <span>◌</span>
-          </div>
+        <div className="flex flex-col items-end max-[768px]:hidden">
 
-          <div className="stat-content">
-            <span>Discovery</span>
-            <strong>{discoveryClients}</strong>
-          </div>
+          <span className="text-xs uppercase tracking-widest text-gray-400">
 
-        </div>
+            Total
 
+          </span>
 
-        <div className="stat-card">
-
-          <div className="stat-icon green">
-            <span>↗</span>
-          </div>
-
-          <div className="stat-content">
-            <span>Active</span>
-            <strong>{activeClients}</strong>
-          </div>
-
-        </div>
-
-
-        <div className="stat-card">
-
-          <div className="stat-icon blue">
-            <span>✓</span>
-          </div>
-
-          <div className="stat-content">
-            <span>Delivered</span>
-            <strong>{deliveredClients}</strong>
-          </div>
+          <strong className="mt-0.5 text-[22px]">{totalClients}</strong>
 
         </div>
 
       </div>
 
 
-      {/* =========================
-          ADD CLIENT CARD
-      ========================= */}
 
-      <div className="add-client-card">
+      {/* STAT CARDS */}
 
-        <div className="section-header">
+      <div className="mb-[18px] grid grid-cols-1 gap-3.5 min-[481px]:grid-cols-2 min-[1101px]:grid-cols-4">
 
-          <div>
-            <div className="section-icon">
-              +
+        {statCards.map((item) => (
+
+          <div key={item.label} className={`${card} flex min-h-[88px] items-center gap-3.5 p-4`}>
+
+            <div className={`flex h-11 w-11 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
+
+              <span>{item.icon}</span>
+
             </div>
+
+
 
             <div>
-              <h2>Add New Client</h2>
 
-              <p>
-                Create a new client and automatically assign follow-up.
-              </p>
+              <span className="mb-1 block text-xs text-gray-400">{item.label}</span>
+
+              <strong className="block text-[22px] font-bold text-gray-900">{item.value}</strong>
+
             </div>
+
           </div>
 
-          <span className="automation-badge">
+        ))}
+
+      </div>
+
+
+
+      {/* ADD CLIENT CARD */}
+
+      <div className={`${card} mb-[18px] p-5 max-[480px]:p-3.5`}>
+
+        <div className="mb-[18px] flex items-center justify-between max-[768px]:flex-col max-[768px]:items-start max-[768px]:gap-2.5">
+
+          <div className="flex items-center gap-3">
+
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-xl text-white">
+
+              +
+
+            </div>
+
+
+
+            <div>
+
+              <h2 className="text-base font-bold">Add New Client</h2>
+
+              <p className="mt-0.5 text-xs text-gray-400">
+
+                Create a new client and automatically assign follow-up.
+
+              </p>
+
+            </div>
+
+          </div>
+
+
+
+          <span className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-600">
+
             ● Automation Active
+
           </span>
 
         </div>
 
 
-        <div className="form-grid">
+
+        <div className="grid grid-cols-1 items-end gap-3 min-[769px]:grid-cols-2 min-[1101px]:grid-cols-[1fr_1fr_1fr_150px]">
 
           {/* NAME */}
 
-          <div className="form-group">
+          <div>
 
-            <label>
-              Client Name
-              <span>*</span>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+
+              Client Name<span className="ml-0.5 text-red-500">*</span>
+
             </label>
 
-            <div className="input-wrapper">
+            <div className={inputWrap}>
 
-              <span className="input-icon">
-                ◯
-              </span>
+              <span className="flex w-10 items-center justify-center text-sm text-gray-400">◯</span>
 
               <input
+
                 type="text"
+
                 placeholder="Enter client name"
+
                 value={name}
-                onChange={(e) =>
-                  setName(e.target.value)
-                }
+
+                onChange={(e) => setName(e.target.value)}
+
+                className={inputBase}
+
               />
 
             </div>
 
           </div>
+
 
 
           {/* EMAIL */}
 
-          <div className="form-group">
+          <div>
 
-            <label>
-              Email Address
-              <span>*</span>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+
+              Email Address<span className="ml-0.5 text-red-500">*</span>
+
             </label>
 
-            <div className="input-wrapper">
+            <div className={inputWrap}>
 
-              <span className="input-icon">
-                @
-              </span>
+              <span className="flex w-10 items-center justify-center text-sm text-gray-400">@</span>
 
               <input
+
                 type="email"
+
                 placeholder="client@example.com"
+
                 value={email}
-                onChange={(e) =>
-                  setEmail(e.target.value)
-                }
+
+                onChange={(e) => setEmail(e.target.value)}
+
+                className={inputBase}
+
               />
 
             </div>
 
           </div>
+
 
 
           {/* COMPANY */}
 
-          <div className="form-group">
+          <div>
 
-            <label>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+
               Company
+
             </label>
 
-            <div className="input-wrapper">
+            <div className={inputWrap}>
 
-              <span className="input-icon">
-                ◈
-              </span>
+              <span className="flex w-10 items-center justify-center text-sm text-gray-400">◈</span>
 
               <input
+
                 type="text"
+
                 placeholder="Company name"
+
                 value={company}
-                onChange={(e) =>
-                  setCompany(e.target.value)
-                }
+
+                onChange={(e) => setCompany(e.target.value)}
+
+                className={inputBase}
+
               />
 
             </div>
@@ -593,30 +1081,41 @@ export default function Clients() {
           </div>
 
 
+
           {/* BUTTON */}
 
-          <div className="form-group button-group">
-
-            <label>
-              &nbsp;
-            </label>
+          <div>
 
             <button
-              className="add-btn"
+
               onClick={addClient}
+
               disabled={loading || importing}
+
+              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-gray-900 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+
             >
 
               {loading ? (
+
                 <>
-                  <span className="spinner"></span>
+
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+
                   Adding...
+
                 </>
+
               ) : (
+
                 <>
-                  <span>+</span>
+
+                  <span className="text-base leading-none">+</span>
+
                   Add Client
+
                 </>
+
               )}
 
             </button>
@@ -626,13 +1125,15 @@ export default function Clients() {
         </div>
 
 
-        <div className="automation-info">
 
-          <span className="info-dot"></span>
+        <div className="mt-3.5 flex items-center gap-1.5 border-t border-gray-100 pt-3 text-xs text-gray-400">
+
+          <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
 
           <span>
-            Adding a client automatically creates a follow-up task
-            and activity record.
+
+            Adding a client automatically creates a follow-up task and activity record.
+
           </span>
 
         </div>
@@ -640,83 +1141,108 @@ export default function Clients() {
       </div>
 
 
-      {/* =========================
-          CLIENT LIST
-      ========================= */}
 
-      <div className="clients-card">
+      {/* CLIENT LIST */}
 
-        <div className="clients-toolbar">
+      <div className={`${card} overflow-hidden`}>
+
+        <div className="flex min-h-[72px] items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 max-[480px]:flex-col max-[480px]:items-start">
 
           <div>
-            <h2>All Clients</h2>
 
-            <p>
-              {filteredClients.length} client
-              {filteredClients.length !== 1 ? "s" : ""} found
+            <h2 className="text-base font-bold">All Clients</h2>
+
+            <p className="mt-0.5 text-xs text-gray-400">
+
+              Showing {visibleClients.length} of {filteredClients.length} matching client
+
+              {filteredClients.length !== 1 ? "s" : ""}
+
             </p>
+
           </div>
 
 
-          <div className="toolbar-right">
 
-            <label className={`import-btn${importing ? " disabled" : ""}`}>
+          <div className="flex items-center gap-2 max-[768px]:w-full max-[480px]:flex-col max-[480px]:items-stretch">
+
+            <label
+
+              className={`inline-flex cursor-pointer items-center whitespace-nowrap px-3 hover:bg-gray-50 max-[480px]:justify-center ${toolbarControl} ${
+
+                importing ? "cursor-wait opacity-60" : ""
+
+              }`}
+
+            >
+
               {importing ? "Importing..." : "Upload Excel"}
+
               <input
+
                 type="file"
+
                 accept=".xlsx"
+
                 onChange={importClientsFromExcel}
+
                 disabled={importing}
+
                 aria-label="Upload Excel workbook"
+
+                className="hidden"
+
               />
+
             </label>
+
+
 
             {/* SEARCH */}
 
-            <div className="search-box">
+            <div className={`flex w-[200px] items-center gap-2 bg-gray-50 px-2.5 max-[768px]:w-auto max-[768px]:flex-1 max-[480px]:w-full ${toolbarControl}`}>
 
-              <span>⌕</span>
+              <span className="text-base text-gray-400">⌕</span>
 
               <input
+
                 type="text"
+
                 placeholder="Search clients..."
+
                 value={search}
-                onChange={(e) =>
-                  setSearch(e.target.value)
-                }
+
+                onChange={(e) => setSearch(e.target.value)}
+
+                className="w-full border-none bg-transparent text-[13px] text-gray-700 outline-none placeholder:text-gray-400"
+
               />
 
             </div>
 
 
+
             {/* FILTER */}
 
             <select
+
               value={stageFilter}
-              onChange={(e) =>
-                setStageFilter(e.target.value)
-              }
+
+              onChange={(e) => setStageFilter(e.target.value)}
+
+              className={`cursor-pointer px-2.5 outline-none max-[480px]:w-full ${toolbarControl}`}
+
             >
 
-              <option value="all">
-                All Stages
-              </option>
+              <option value="all">All Stages</option>
 
-              <option value="discovery">
-                Discovery
-              </option>
+              <option value="discovery">Discovery</option>
 
-              <option value="signed">
-                Signed
-              </option>
+              <option value="signed">Signed</option>
 
-              <option value="active">
-                Active
-              </option>
+              <option value="active">Active</option>
 
-              <option value="delivered">
-                Delivered
-              </option>
+              <option value="delivered">Delivered</option>
 
             </select>
 
@@ -725,33 +1251,37 @@ export default function Clients() {
         </div>
 
 
-        {/* =========================
-            TABLE
-        ========================= */}
 
-        <div className="table-container">
+        {/* TABLE */}
 
-          <table>
+        <div className="w-full overflow-x-auto">
 
-            <thead>
+          <table className="w-full min-w-[950px] border-collapse">
+
+            <thead className="bg-gray-50">
 
               <tr>
 
-                <th>CLIENT</th>
+                {["CLIENT", "COMPANY", "STAGE", "ASSIGNED TO", "EMAIL", "ACTION"].map((h) => (
 
-                <th>COMPANY</th>
+                  <th
 
-                <th>STAGE</th>
+                    key={h}
 
-                <th>ASSIGNED TO</th>
+                    className="h-11 border-b border-gray-100 px-5 text-left text-xs font-bold tracking-wider text-gray-400"
 
-                <th>EMAIL</th>
+                  >
 
-                <th>ACTION</th>
+                    {h}
+
+                  </th>
+
+                ))}
 
               </tr>
 
             </thead>
+
 
 
             <tbody>
@@ -760,27 +1290,38 @@ export default function Clients() {
 
                 <tr>
 
-                  <td
-                    colSpan="6"
-                    className="empty-cell"
-                  >
+                  <td colSpan="6" className="p-0">
 
-                    <div className="empty-state">
+                    <div className="px-5 py-14 text-center">
 
-                      <div className="empty-icon">
+                      <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-lg text-gray-400">
+
                         ◉
+
                       </div>
 
-                      <h3>
+
+
+                      <h3 className="text-sm font-semibold text-gray-700">
+
                         {clients.length === 0
+
                           ? "No clients yet"
+
                           : "No matching clients"}
+
                       </h3>
 
-                      <p>
+
+
+                      <p className="mt-1 text-xs text-gray-400">
+
                         {clients.length === 0
+
                           ? "Add your first client using the form above."
+
                           : "Try changing your search or stage filter."}
+
                       </p>
 
                     </div>
@@ -791,162 +1332,221 @@ export default function Clients() {
 
               ) : (
 
-                filteredClients.map((client) => (
+                visibleClients.map((client) => {
 
-                  <tr key={client.id}>
-
-                    {/* CLIENT */}
-
-                    <td>
-
-                      <Link
-                        to={`/client/${client.id}`}
-                        className="client-link"
-                      >
-
-                        <div className="client-avatar">
-                          {client.name
-                            ?.charAt(0)
-                            ?.toUpperCase() || "C"}
-                        </div>
-
-                        <div className="client-details">
-
-                          <strong>
-                            {client.name}
-                          </strong>
-
-                          <span>
-                            ID: {client.id.slice(0, 8)}
-                          </span>
-
-                        </div>
-
-                      </Link>
-
-                    </td>
+                  const stage = getStageStyle(client.stage)
 
 
-                    {/* COMPANY */}
 
-                    <td>
+                  return (
 
-                      <div className="company-info">
+                    <tr
 
-                        <div className="company-icon">
-                          ◈
-                        </div>
+                      key={client.id}
 
-                        <span>
-                          {client.company || "No company"}
-                        </span>
+                      className="transition-colors last:[&>td]:border-b-0 hover:bg-gray-50"
 
-                      </div>
+                    >
 
-                    </td>
+                      {/* CLIENT */}
 
-
-                    {/* STAGE */}
-
-                    <td>
-
-                      <span
-                        className={`stage-badge ${getStageClass(
-                          client.stage
-                        )}`}
-                      >
-
-                        <i></i>
-
-                        {formatStage(client.stage)}
-
-                      </span>
-
-                    </td>
-
-
-                    {/* ASSIGNED */}
-
-                    <td>
-
-                      <div className="assigned-member">
-
-                        <div className="member-avatar">
-                          {getMemberInitial(
-                            client.assigned_to
-                          )}
-                        </div>
-
-                        <div>
-                          <strong>
-                            {client.assigned_to ||
-                              "Unassigned"}
-                          </strong>
-
-                          <span>
-                            Team Member
-                          </span>
-                        </div>
-
-                      </div>
-
-                    </td>
-
-
-                    {/* EMAIL */}
-
-                    <td>
-
-                      <a
-                        href={`mailto:${client.email}`}
-                        className="email-link"
-                      >
-                        {client.email}
-                      </a>
-
-                    </td>
-
-
-                    {/* ACTION */}
-
-                    <td>
-
-                      <div className="actions">
+                      <td className="border-b border-gray-100 px-5 py-3 text-[13px] text-gray-600">
 
                         <Link
+
                           to={`/client/${client.id}`}
-                          className="view-btn"
+
+                          className="flex items-center gap-2.5 text-inherit no-underline"
+
                         >
-                          View
+
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-[13px] font-bold text-indigo-600">
+
+                            {client.name?.charAt(0)?.toUpperCase() || "C"}
+
+                          </div>
+
+
+
+                          <div className="flex flex-col">
+
+                            <strong className="text-sm font-semibold text-gray-900">
+
+                              {client.name}
+
+                            </strong>
+
+                            <span className="mt-0.5 text-xs text-gray-400">
+
+                              ID: {client.id.slice(0, 8)}
+
+                            </span>
+
+                          </div>
+
                         </Link>
 
-                        <button
-                          className="note-btn"
-                          onClick={() => {
+                      </td>
 
-                            const note = window.prompt(
-                              "Enter note"
-                            )
 
-                            if (note) {
-                              addNote(
-                                client.id,
-                                note
-                              )
-                            }
 
-                          }}
+                      {/* COMPANY */}
+
+                      <td className="border-b border-gray-100 px-5 py-3 text-[13px] text-gray-600">
+
+                        <div className="flex items-center gap-2">
+
+                          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-100 text-xs text-gray-500">
+
+                            ◈
+
+                          </div>
+
+                          <span className="whitespace-nowrap">
+
+                            {client.company || "No company"}
+
+                          </span>
+
+                        </div>
+
+                      </td>
+
+
+
+                      {/* STAGE */}
+
+                      <td className="border-b border-gray-100 px-5 py-3">
+
+                        <span className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${stage.badge}`}>
+
+                          <i className={`h-1.5 w-1.5 rounded-full ${stage.dot}`}></i>
+
+                          {formatStage(client.stage)}
+
+                        </span>
+
+                      </td>
+
+
+
+                      {/* ASSIGNED */}
+
+                      <td className="border-b border-gray-100 px-5 py-3">
+
+                        <div className="flex items-center gap-2">
+
+                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
+
+                            {getMemberInitial(client.assigned_to)}
+
+                          </div>
+
+
+
+                          <div className="flex flex-col">
+
+                            <strong className="text-[13px] font-semibold text-gray-700">
+
+                              {client.assigned_to || "Unassigned"}
+
+                            </strong>
+
+                            <span className="mt-0.5 text-xs text-gray-400">
+
+                              Team Member
+
+                            </span>
+
+                          </div>
+
+                        </div>
+
+                      </td>
+
+
+
+                      {/* EMAIL */}
+
+                      <td className="border-b border-gray-100 px-5 py-3">
+
+                        <a
+
+                          href={`mailto:${client.email}`}
+
+                          className="text-[13px] text-gray-500 no-underline hover:text-gray-900 hover:underline"
+
                         >
-                          + Note
-                        </button>
 
-                      </div>
+                          {client.email}
 
-                    </td>
+                        </a>
 
-                  </tr>
+                      </td>
 
-                ))
+
+
+                      {/* ACTION */}
+
+                      <td className="border-b border-gray-100 px-5 py-3">
+
+                        <div className="flex items-center gap-1.5">
+
+                          <Link
+
+                            to={`/client/${client.id}`}
+
+                            className="inline-flex h-8 items-center justify-center rounded-md bg-gray-900 px-3 text-xs font-semibold text-white no-underline hover:bg-gray-800"
+
+                          >
+
+                            View
+
+                          </Link>
+
+
+
+                          <button
+
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 hover:bg-gray-50"
+
+                            onClick={() => {
+
+                              const note = window.prompt("Enter note")
+
+
+
+                              if (note) {
+
+                                addNote(client.id, note)
+
+                              }
+
+                            }}
+
+                          >
+
+                            + Note
+
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteClient(client)}
+                            className="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+
+                        </div>
+
+                      </td>
+
+                    </tr>
+
+                  )
+
+                })
 
               )}
 
@@ -958,942 +1558,8 @@ export default function Clients() {
 
       </div>
 
-
-      {/* =========================
-          CSS
-      ========================= */}
-
-      <style>{`
-
-        * {
-          box-sizing: border-box;
-        }
-
-        .clients-page {
-          width: 100%;
-          color: #111827;
-        }
-
-
-        /* =========================
-           PAGE HEADER
-        ========================= */
-
-        .page-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          margin-bottom: 22px;
-        }
-
-        .breadcrumb {
-          color: #9ca3af;
-          font-size: 10px;
-          margin-bottom: 7px;
-        }
-
-        .breadcrumb span {
-          margin: 0 6px;
-          color: #d1d5db;
-        }
-
-        .page-header h1 {
-          margin: 0;
-          font-size: 26px;
-          font-weight: 750;
-          letter-spacing: -0.7px;
-        }
-
-        .page-header p {
-          margin: 6px 0 0;
-          color: #9ca3af;
-          font-size: 11px;
-        }
-
-        .header-count {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-        }
-
-        .header-count span {
-          color: #9ca3af;
-          font-size: 9px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-
-        .header-count strong {
-          margin-top: 2px;
-          font-size: 20px;
-        }
-
-
-        /* =========================
-           STATS
-        ========================= */
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 13px;
-          margin-bottom: 18px;
-        }
-
-        .stat-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-
-          min-height: 86px;
-          padding: 15px;
-
-          background: #fff;
-          border: 1px solid #e8eaee;
-          border-radius: 11px;
-
-          box-shadow:
-            0 2px 7px rgba(15, 23, 42, 0.025);
-        }
-
-        .stat-icon {
-          width: 40px;
-          height: 40px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 9px;
-
-          font-size: 16px;
-          font-weight: 700;
-        }
-
-        .stat-icon.purple {
-          background: #f0edff;
-          color: #635bdb;
-        }
-
-        .stat-icon.orange {
-          background: #fff4e8;
-          color: #ea7a18;
-        }
-
-        .stat-icon.green {
-          background: #eafaf2;
-          color: #15966b;
-        }
-
-        .stat-icon.blue {
-          background: #eaf3ff;
-          color: #3976d6;
-        }
-
-        .stat-content span {
-          display: block;
-          color: #9ca3af;
-          font-size: 9px;
-          margin-bottom: 4px;
-        }
-
-        .stat-content strong {
-          display: block;
-          color: #111827;
-          font-size: 20px;
-          font-weight: 700;
-        }
-
-
-        /* =========================
-           ADD CLIENT
-        ========================= */
-
-        .add-client-card {
-          margin-bottom: 18px;
-          padding: 19px;
-
-          background: #fff;
-          border: 1px solid #e8eaee;
-          border-radius: 11px;
-
-          box-shadow:
-            0 2px 7px rgba(15, 23, 42, 0.025);
-        }
-
-        .section-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-
-          margin-bottom: 18px;
-        }
-
-        .section-header > div:first-child {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
-
-        .section-icon {
-          width: 34px;
-          height: 34px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 8px;
-
-          background: #111827;
-          color: white;
-
-          font-size: 19px;
-        }
-
-        .section-header h2 {
-          margin: 0;
-          font-size: 14px;
-          font-weight: 700;
-        }
-
-        .section-header p {
-          margin: 3px 0 0;
-          color: #9ca3af;
-          font-size: 9px;
-        }
-
-        .automation-badge {
-          padding: 6px 9px;
-
-          border-radius: 6px;
-
-          background: #ecfdf5;
-          color: #059669;
-
-          font-size: 8px;
-          font-weight: 600;
-        }
-
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr 1fr 145px;
-          gap: 11px;
-          align-items: end;
-        }
-
-        .form-group label {
-          display: block;
-          margin-bottom: 6px;
-
-          color: #374151;
-          font-size: 9px;
-          font-weight: 600;
-        }
-
-        .form-group label span {
-          color: #ef4444;
-          margin-left: 2px;
-        }
-
-        .input-wrapper {
-          height: 39px;
-
-          display: flex;
-          align-items: center;
-
-          border: 1px solid #e2e5e9;
-          border-radius: 7px;
-
-          background: #fff;
-
-          transition: all 0.2s ease;
-        }
-
-        .input-wrapper:focus-within {
-          border-color: #9ca3af;
-          box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.04);
-        }
-
-        .input-icon {
-          width: 34px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          color: #a1a1aa;
-          font-size: 12px;
-        }
-
-        .input-wrapper input {
-          width: 100%;
-          height: 100%;
-
-          padding-right: 9px;
-
-          border: none;
-          outline: none;
-          background: transparent;
-
-          color: #374151;
-          font-size: 10px;
-        }
-
-        .input-wrapper input::placeholder {
-          color: #b1b5bc;
-        }
-
-        .add-btn {
-          width: 100%;
-          height: 39px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 7px;
-
-          border: none;
-          border-radius: 7px;
-
-          background: #111827;
-          color: white;
-
-          font-size: 10px;
-          font-weight: 600;
-
-          cursor: pointer;
-
-          transition: all 0.2s ease;
-        }
-
-        .add-btn:hover:not(:disabled) {
-          background: #1f2937;
-          transform: translateY(-1px);
-        }
-
-        .add-btn:disabled {
-          opacity: 0.6;
-          cursor: not-allowed;
-        }
-
-        .add-btn > span:first-child {
-          font-size: 16px;
-          line-height: 1;
-        }
-
-        .spinner {
-          width: 11px;
-          height: 11px;
-
-          border: 2px solid rgba(255,255,255,.3);
-          border-top-color: #fff;
-          border-radius: 50%;
-
-          animation: spin .7s linear infinite;
-        }
-
-        @keyframes spin {
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        .automation-info {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-
-          margin-top: 13px;
-          padding-top: 12px;
-
-          border-top: 1px solid #f0f1f3;
-
-          color: #9ca3af;
-          font-size: 8px;
-        }
-
-        .info-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-          background: #22c55e;
-        }
-
-
-        /* =========================
-           CLIENT CARD
-        ========================= */
-
-        .clients-card {
-          overflow: hidden;
-
-          background: #fff;
-          border: 1px solid #e8eaee;
-          border-radius: 11px;
-
-          box-shadow:
-            0 2px 7px rgba(15, 23, 42, 0.025);
-        }
-
-        .clients-toolbar {
-          min-height: 68px;
-
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-
-          padding: 12px 17px;
-
-          border-bottom: 1px solid #edf0f2;
-        }
-
-        .clients-toolbar h2 {
-          margin: 0;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .clients-toolbar p {
-          margin: 3px 0 0;
-          color: #a1a1aa;
-          font-size: 8px;
-        }
-
-        .toolbar-right {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-
-        .import-btn {
-          height: 34px;
-          display: inline-flex;
-          align-items: center;
-          padding: 0 10px;
-          border: 1px solid #e8eaee;
-          border-radius: 7px;
-          background: white;
-          color: #4b5563;
-          font-size: 9px;
-          cursor: pointer;
-          white-space: nowrap;
-        }
-
-        .import-btn.disabled {
-          opacity: 0.6;
-          cursor: wait;
-        }
-
-        .import-btn input {
-          display: none;
-        }
-
-        .search-box {
-          width: 185px;
-          height: 34px;
-
-          display: flex;
-          align-items: center;
-          gap: 6px;
-
-          padding: 0 9px;
-
-          border: 1px solid #e8eaee;
-          border-radius: 7px;
-
-          background: #fafbfc;
-        }
-
-        .search-box span {
-          color: #9ca3af;
-          font-size: 15px;
-        }
-
-        .search-box input {
-          width: 100%;
-
-          border: none;
-          outline: none;
-          background: transparent;
-
-          font-size: 9px;
-          color: #374151;
-        }
-
-        .search-box input::placeholder {
-          color: #a5a9b0;
-        }
-
-        .toolbar-right select {
-          height: 34px;
-
-          padding: 0 8px;
-
-          border: 1px solid #e8eaee;
-          border-radius: 7px;
-
-          background: white;
-          color: #4b5563;
-
-          font-size: 9px;
-          outline: none;
-
-          cursor: pointer;
-        }
-
-
-        /* =========================
-           TABLE
-        ========================= */
-
-        .table-container {
-          width: 100%;
-          overflow-x: auto;
-        }
-
-        table {
-          width: 100%;
-          min-width: 950px;
-          border-collapse: collapse;
-        }
-
-        thead {
-          background: #fafafa;
-        }
-
-        th {
-          height: 40px;
-
-          padding: 0 15px;
-
-          border-bottom: 1px solid #edf0f2;
-
-          color: #9ca3af;
-
-          text-align: left;
-
-          font-size: 8px;
-          font-weight: 700;
-          letter-spacing: .06em;
-        }
-
-        td {
-          padding: 12px 15px;
-
-          border-bottom: 1px solid #f1f2f4;
-
-          color: #4b5563;
-
-          font-size: 9px;
-        }
-
-        tbody tr {
-          transition: background .15s ease;
-        }
-
-        tbody tr:hover {
-          background: #fafbfc;
-        }
-
-        tbody tr:last-child td {
-          border-bottom: none;
-        }
-
-
-        /* =========================
-           CLIENT
-        ========================= */
-
-        .client-link {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-
-          color: inherit;
-          text-decoration: none;
-        }
-
-        .client-avatar {
-          width: 32px;
-          height: 32px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          flex-shrink: 0;
-
-          border-radius: 8px;
-
-          background: #eef0ff;
-          color: #5b56c8;
-
-          font-size: 10px;
-          font-weight: 700;
-        }
-
-        .client-details {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .client-details strong {
-          color: #111827;
-          font-size: 10px;
-          font-weight: 650;
-        }
-
-        .client-details span {
-          margin-top: 3px;
-          color: #a1a1aa;
-          font-size: 7px;
-        }
-
-
-        /* =========================
-           COMPANY
-        ========================= */
-
-        .company-info {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-
-        .company-icon {
-          width: 25px;
-          height: 25px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 6px;
-
-          background: #f4f5f6;
-          color: #6b7280;
-
-          font-size: 10px;
-        }
-
-        .company-info span {
-          white-space: nowrap;
-        }
-
-
-        /* =========================
-           STAGE
-        ========================= */
-
-        .stage-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 5px;
-
-          padding: 5px 7px;
-
-          border-radius: 5px;
-
-          font-size: 8px;
-          font-weight: 600;
-        }
-
-        .stage-badge i {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-        }
-
-        .stage-discovery {
-          background: #fff5e9;
-          color: #c76513;
-        }
-
-        .stage-discovery i {
-          background: #f97316;
-        }
-
-        .stage-signed {
-          background: #edf4ff;
-          color: #3475d3;
-        }
-
-        .stage-signed i {
-          background: #3b82f6;
-        }
-
-        .stage-active {
-          background: #eafaf2;
-          color: #07855d;
-        }
-
-        .stage-active i {
-          background: #10b981;
-        }
-
-        .stage-delivered {
-          background: #edf9ef;
-          color: #19863b;
-        }
-
-        .stage-delivered i {
-          background: #22c55e;
-        }
-
-        .stage-default {
-          background: #f3f4f6;
-          color: #6b7280;
-        }
-
-        .stage-default i {
-          background: #9ca3af;
-        }
-
-
-        /* =========================
-           MEMBER
-        ========================= */
-
-        .assigned-member {
-          display: flex;
-          align-items: center;
-          gap: 7px;
-        }
-
-        .member-avatar {
-          width: 27px;
-          height: 27px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 50%;
-
-          background: #f1f5f9;
-          color: #475569;
-
-          font-size: 8px;
-          font-weight: 700;
-        }
-
-        .assigned-member > div:last-child {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .assigned-member strong {
-          color: #374151;
-          font-size: 9px;
-          font-weight: 600;
-        }
-
-        .assigned-member span {
-          margin-top: 2px;
-          color: #a1a1aa;
-          font-size: 7px;
-        }
-
-
-        /* =========================
-           EMAIL
-        ========================= */
-
-        .email-link {
-          color: #6b7280;
-          text-decoration: none;
-          font-size: 8px;
-        }
-
-        .email-link:hover {
-          color: #111827;
-          text-decoration: underline;
-        }
-
-
-        /* =========================
-           ACTION
-        ========================= */
-
-        .actions {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-        }
-
-        .view-btn,
-        .note-btn {
-          height: 27px;
-
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-
-          padding: 0 8px;
-
-          border-radius: 5px;
-
-          font-size: 8px;
-          font-weight: 600;
-
-          cursor: pointer;
-          text-decoration: none;
-        }
-
-        .view-btn {
-          background: #111827;
-          color: white;
-        }
-
-        .view-btn:hover {
-          background: #1f2937;
-        }
-
-        .note-btn {
-          border: 1px solid #e5e7eb;
-          background: white;
-          color: #4b5563;
-        }
-
-        .note-btn:hover {
-          background: #f8f9fa;
-        }
-
-
-        /* =========================
-           EMPTY STATE
-        ========================= */
-
-        .empty-cell {
-          padding: 0 !important;
-        }
-
-        .empty-state {
-          padding: 55px 20px;
-          text-align: center;
-        }
-
-        .empty-icon {
-          width: 45px;
-          height: 45px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          margin: 0 auto 10px;
-
-          border-radius: 11px;
-
-          background: #f3f4f6;
-          color: #9ca3af;
-
-          font-size: 17px;
-        }
-
-        .empty-state h3 {
-          margin: 0;
-          color: #374151;
-          font-size: 12px;
-        }
-
-        .empty-state p {
-          margin: 5px 0 0;
-          color: #a1a1aa;
-          font-size: 9px;
-        }
-
-
-        /* =========================
-           RESPONSIVE
-        ========================= */
-
-        @media (max-width: 1100px) {
-
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .form-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-
-        }
-
-
-        @media (max-width: 768px) {
-
-          .page-header {
-            align-items: flex-start;
-          }
-
-          .header-count {
-            display: none;
-          }
-
-          .stats-grid {
-            grid-template-columns: 1fr 1fr;
-          }
-
-          .section-header {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 10px;
-          }
-
-          .form-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .toolbar-right {
-            width: 100%;
-          }
-
-          .search-box {
-            flex: 1;
-            width: auto;
-          }
-
-        }
-
-
-        @media (max-width: 480px) {
-
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .page-header h1 {
-            font-size: 22px;
-          }
-
-          .add-client-card {
-            padding: 14px;
-          }
-
-          .clients-toolbar {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 10px;
-          }
-
-          .toolbar-right {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .search-box {
-            width: 100%;
-          }
-
-          .toolbar-right select {
-            width: 100%;
-          }
-
-        }
-
-      `}</style>
-
     </div>
+
   )
+
 }

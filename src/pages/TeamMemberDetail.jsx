@@ -1,458 +1,552 @@
-import { useEffect, useState } from "react"
-import { useParams, Link } from "react-router-dom"
-import { supabase } from "../lib/supabase"
+
+import { useEffect, useState } from "react";
+import { useParams, Link } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 export default function TeamMemberDetail() {
-  const { id } = useParams()
+  const { id } = useParams();
 
-  const [member, setMember] = useState(null)
-  const [clients, setClients] = useState([])
-  const [tasks, setTasks] = useState([])
-  const [activities, setActivities] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [member, setMember] = useState(null);
+  const [clients, setClients] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchMemberData = async () => {
-    setLoading(true)
+    setLoading(true);
 
-    // =========================
-    // FETCH TEAM MEMBER
-    // =========================
-    const { data: memberData, error: memberError } = await supabase
-      .from("team_members")
-      .select("*")
-      .eq("id", id)
-      .single()
+    try {
+      const { data: memberData, error: memberError } =
+        await supabase
+          .from("team_members")
+          .select("*")
+          .eq("id", id)
+          .single();
 
-    if (memberError) {
-      console.error("Member error:", memberError)
-      alert(memberError.message)
-      setLoading(false)
-      return
-    }
-
-    setMember(memberData)
-
-    // =========================
-    // FETCH ASSIGNED CLIENTS
-    // =========================
-    const { data: clientData, error: clientError } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("assigned_to", id)
-      .order("created_at", { ascending: false })
-
-    if (clientError) {
-      console.error("Clients error:", clientError)
-    }
-
-    setClients(clientData || [])
-
-    // =========================
-    // FETCH TASKS
-    // =========================
-    const clientIds = (clientData || []).map(
-      (client) => client.id
-    )
-
-    if (clientIds.length > 0) {
-      const { data: taskData, error: taskError } = await supabase
-        .from("tasks")
-        .select("*")
-        .in("client_id", clientIds)
-        .order("due_date", { ascending: true })
-
-      if (taskError) {
-        console.error("Tasks error:", taskError)
+      if (memberError) {
+        console.error("Member error:", memberError);
+        alert(memberError.message);
+        setMember(null);
+        return;
       }
 
-      setTasks(taskData || [])
+      setMember(memberData);
 
-      // =========================
-      // FETCH ACTIVITIES
-      // =========================
+      const { data: clientData, error: clientError } =
+        await supabase
+          .from("clients")
+          .select("*")
+          .eq("assigned_to", id)
+          .order("created_at", { ascending: false });
+
+      if (clientError) {
+        console.error("Clients error:", clientError);
+      }
+
+      const clientList = clientData || [];
+      setClients(clientList);
+
+      const clientIds = clientList.map((client) => client.id);
+
+      if (clientIds.length === 0) {
+        setTasks([]);
+        setActivities([]);
+        return;
+      }
+
+      const { data: taskData, error: taskError } =
+        await supabase
+          .from("tasks")
+          .select("*")
+          .in("client_id", clientIds)
+          .order("due_date", { ascending: true });
+
+      if (taskError) {
+        console.error("Tasks error:", taskError);
+      }
+
+      setTasks(taskData || []);
+
       const { data: activityData, error: activityError } =
         await supabase
           .from("activities")
           .select("*")
           .in("client_id", clientIds)
-          .order("created_at", { ascending: false })
+          .order("created_at", { ascending: false });
 
       if (activityError) {
-        console.error("Activities error:", activityError)
+        console.error("Activities error:", activityError);
       }
 
-      setActivities(activityData || [])
+      setActivities(activityData || []);
+    } catch (error) {
+      console.error("Unable to fetch member data:", error);
+      alert("Unable to load team member details.");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false)
-  }
+  };
 
   useEffect(() => {
-    fetchMemberData()
-  }, [id])
+    fetchMemberData();
+  }, [id]);
 
-  // =========================
-  // LOADING
-  // =========================
-  if (loading) {
-    return (
-      <div style={{ padding: "30px" }}>
-        Loading team member...
-      </div>
-    )
-  }
-
-  // =========================
-  // MEMBER NOT FOUND
-  // =========================
-  if (!member) {
-    return (
-      <div style={{ padding: "30px" }}>
-        <h2>Team member not found</h2>
-
-        <Link to="/team-members">
-          ← Back to Team Members
-        </Link>
-      </div>
-    )
-  }
-
-  // =========================
-  // STATISTICS
-  // =========================
   const pendingTasks = tasks.filter(
     (task) => task.status !== "completed"
-  )
+  );
 
   const completedTasks = tasks.filter(
     (task) => task.status === "completed"
-  )
+  );
+
+  const formatDate = (date) => {
+    if (!date) return "No due date";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "No due date";
+    }
+
+    return parsedDate.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const stageStyles = {
+    discovery: "bg-blue-50 text-blue-700",
+    signed: "bg-violet-50 text-violet-700",
+    active: "bg-amber-50 text-amber-700",
+    delivered: "bg-emerald-50 text-emerald-700",
+  };
+
+  const statusStyles = (status) => {
+    if (status === "completed") {
+      return "bg-emerald-50 text-emerald-700";
+    }
+
+    if (status === "pending") {
+      return "bg-amber-50 text-amber-700";
+    }
+
+    return "bg-slate-100 text-slate-600";
+  };
+
+  // Loading
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <div className="flex items-center gap-3 text-sm font-medium text-slate-500">
+          <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
+          Loading team member...
+        </div>
+      </div>
+    );
+  }
+
+  // Member Not Found
+  if (!member) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 px-5 text-center">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-2xl text-slate-400">
+          ?
+        </div>
+
+        <h2 className="text-xl font-bold text-slate-900">
+          Team member not found
+        </h2>
+
+        <p className="mt-2 text-sm text-slate-500">
+          This team member may have been deleted or is unavailable.
+        </p>
+
+        <Link
+          to="/team-members"
+          className="mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
+        >
+          ← Back to Team Members
+        </Link>
+      </div>
+    );
+  }
 
   return (
-    <div style={{ padding: "30px" }}>
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
 
-      {/* =========================
-          BACK BUTTON
-      ========================= */}
+      {/* Back Button */}
       <Link
         to="/team-members"
-        style={{
-          textDecoration: "none"
-        }}
+        className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-indigo-600"
       >
-        ← Back to Team Members
+        <span className="text-lg">←</span>
+        Back to Team Members
       </Link>
 
-      {/* =========================
-          MEMBER HEADER
-      ========================= */}
-      <div
-        style={{
-          marginTop: "25px",
-          marginBottom: "30px"
-        }}
-      >
-        <h1>{member.name}</h1>
+      {/* Member Header */}
+      <div className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        <p style={{ margin: "5px 0", color: "#666" }}>
-          {member.designation || "Team Member"}
-        </p>
+        <div className="h-2 bg-gradient-to-r from-indigo-600 via-violet-500 to-blue-400" />
 
-        <p style={{ margin: "5px 0", color: "#666" }}>
-          {member.email || "No email"}
-        </p>
+        <div className="flex flex-col gap-6 p-5 sm:flex-row sm:items-center sm:p-8">
 
-        <p style={{ margin: "5px 0", color: "#666" }}>
-          {member.phone || "No phone"}
-        </p>
+          <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-3xl font-bold uppercase text-indigo-600 ring-1 ring-indigo-100">
+            {member.name?.trim()?.charAt(0) || "T"}
+          </div>
 
-        <p>
-          Status: <strong>{member.status}</strong>
-        </p>
+          <div className="min-w-0 flex-1">
+
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="break-words text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+                {member.name}
+              </h1>
+
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                  member.status === "active"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {member.status || "Unknown"}
+              </span>
+            </div>
+
+            <p className="mt-2 text-sm font-medium text-indigo-600">
+              {member.designation || "Team Member"}
+            </p>
+
+            <div className="mt-4 flex flex-col gap-3 text-sm text-slate-500 sm:flex-row sm:flex-wrap sm:gap-5">
+
+              <span className="flex min-w-0 items-center gap-2 break-all">
+                <span className="text-slate-400">@</span>
+                {member.email || "No email"}
+              </span>
+
+              <span className="flex items-center gap-2">
+                <span className="text-slate-400">☎</span>
+                {member.phone || "No phone"}
+              </span>
+
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* =========================
-          STATISTICS
-      ========================= */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns:
-            "repeat(3, minmax(0, 1fr))",
-          gap: "20px",
-          marginBottom: "35px"
-        }}
-      >
+      {/* Statistics */}
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "20px"
-          }}
-        >
-          <p>Assigned Clients</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-500">
+              Assigned Clients
+            </p>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-5 w-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m16 0v-2a4 4 0 0 0-3-3.87M14 3.13a4 4 0 0 1 0 7.75M14 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z"
+                />
+              </svg>
+            </div>
+          </div>
 
-          <h2>{clients.length}</h2>
+          <h2 className="mt-4 text-3xl font-bold text-slate-900">
+            {clients.length}
+          </h2>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Clients assigned to this member
+          </p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "20px"
-          }}
-        >
-          <p>Pending Tasks</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-500">
+              Pending Tasks
+            </p>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-5 w-5"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 7v5l3 2"
+                />
+              </svg>
+            </div>
+          </div>
 
-          <h2>{pendingTasks.length}</h2>
+          <h2 className="mt-4 text-3xl font-bold text-amber-600">
+            {pendingTasks.length}
+          </h2>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Tasks waiting to be completed
+          </p>
         </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            padding: "20px"
-          }}
-        >
-          <p>Completed Tasks</p>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md sm:col-span-2 xl:col-span-1">
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-slate-500">
+              Completed Tasks
+            </p>
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                className="h-5 w-5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m5 12 4 4L19 6"
+                />
+              </svg>
+            </div>
+          </div>
 
-          <h2>{completedTasks.length}</h2>
+          <h2 className="mt-4 text-3xl font-bold text-emerald-600">
+            {completedTasks.length}
+          </h2>
+
+          <p className="mt-1 text-xs text-slate-400">
+            Successfully completed tasks
+          </p>
         </div>
 
       </div>
 
-      {/* =========================
-          ASSIGNED CLIENTS
-      ========================= */}
-      <div style={{ marginBottom: "35px" }}>
+      {/* Assigned Clients */}
+      <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        <h2>Assigned Clients</h2>
+        <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+          <h2 className="text-lg font-bold text-slate-900">
+            Assigned Clients
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Clients managed by this team member.
+          </p>
+        </div>
 
-        <div
-          style={{
-            border: "1px solid #ddd",
-            borderRadius: "12px",
-            overflow: "hidden",
-            marginTop: "15px"
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse"
-            }}
-          >
-            <thead>
-              <tr>
-                <th
-                  style={{
-                    padding: "14px",
-                    textAlign: "left"
-                  }}
-                >
-                  Name
-                </th>
-
-                <th
-                  style={{
-                    padding: "14px",
-                    textAlign: "left"
-                  }}
-                >
-                  Email
-                </th>
-
-                <th
-                  style={{
-                    padding: "14px",
-                    textAlign: "left"
-                  }}
-                >
-                  Company
-                </th>
-
-                <th
-                  style={{
-                    padding: "14px",
-                    textAlign: "left"
-                  }}
-                >
-                  Stage
-                </th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {clients.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan="4"
-                    style={{
-                      padding: "25px",
-                      textAlign: "center"
-                    }}
-                  >
-                    No clients assigned.
-                  </td>
+        {clients.length === 0 ? (
+          <div className="px-5 py-12 text-center">
+            <p className="text-sm font-medium text-slate-600">
+              No clients assigned.
+            </p>
+            <p className="mt-1 text-xs text-slate-400">
+              Assigned clients will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[650px] text-left">
+              <thead>
+                <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-4 font-semibold sm:px-6">
+                    Name
+                  </th>
+                  <th className="px-5 py-4 font-semibold sm:px-6">
+                    Email
+                  </th>
+                  <th className="px-5 py-4 font-semibold sm:px-6">
+                    Company
+                  </th>
+                  <th className="px-5 py-4 font-semibold sm:px-6">
+                    Stage
+                  </th>
                 </tr>
-              ) : (
-                clients.map((client) => (
-                  <tr key={client.id}>
+              </thead>
 
-                    <td style={{ padding: "14px" }}>
+              <tbody className="divide-y divide-slate-100">
+                {clients.map((client) => (
+                  <tr
+                    key={client.id}
+                    className="transition hover:bg-slate-50"
+                  >
+                    <td className="px-5 py-4 sm:px-6">
                       <Link
                         to={`/client/${client.id}`}
-                        style={{
-                          textDecoration: "none",
-                          fontWeight: "600"
-                        }}
+                        className="font-semibold text-slate-800 transition hover:text-indigo-600"
                       >
-                        {client.name}
+                        {client.name || "Unnamed Client"}
                       </Link>
                     </td>
 
-                    <td style={{ padding: "14px" }}>
-                      {client.email}
+                    <td className="px-5 py-4 text-sm text-slate-500 sm:px-6">
+                      {client.email || "-"}
                     </td>
 
-                    <td style={{ padding: "14px" }}>
+                    <td className="px-5 py-4 text-sm text-slate-500 sm:px-6">
                       {client.company || "-"}
                     </td>
 
-                    <td style={{ padding: "14px" }}>
-                      {client.stage}
+                    <td className="px-5 py-4 sm:px-6">
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                          stageStyles[client.stage] ||
+                          "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {client.stage || "Unknown"}
+                      </span>
                     </td>
-
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {/* Tasks */}
+      <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+          <h2 className="text-lg font-bold text-slate-900">
+            Tasks & Follow-ups
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Track tasks associated with assigned clients.
+          </p>
         </div>
 
-      </div>
-
-      {/* =========================
-          TASKS
-      ========================= */}
-      <div style={{ marginBottom: "35px" }}>
-
-        <h2>Tasks</h2>
-
-        <div
-          style={{
-            marginTop: "15px"
-          }}
-        >
-          {tasks.length === 0 ? (
-            <p>No tasks found.</p>
-          ) : (
-            tasks.map((task) => {
-
+        {tasks.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-slate-500">
+            No tasks found.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {tasks.map((task) => {
               const taskClient = clients.find(
-                (client) => client.id === task.client_id
-              )
+                (client) =>
+                  String(client.id) === String(task.client_id)
+              );
 
               return (
                 <div
                   key={task.id}
-                  style={{
-                    border: "1px solid #ddd",
-                    borderRadius: "10px",
-                    padding: "15px",
-                    marginBottom: "10px"
-                  }}
+                  className="flex flex-col gap-4 px-5 py-5 transition hover:bg-slate-50/70 sm:px-6 md:flex-row md:items-center md:justify-between"
                 >
-                  <h3 style={{ margin: "0 0 8px" }}>
-                    {task.title}
-                  </h3>
+                  <div className="min-w-0">
+                    <h3 className="break-words text-sm font-semibold text-slate-900">
+                      {task.title || "Untitled Task"}
+                    </h3>
 
-                  <p style={{ margin: "5px 0" }}>
-                    Client:{" "}
-                    {taskClient?.name || "Unknown"}
-                  </p>
+                    <p className="mt-2 text-xs text-slate-500">
+                      Client: {taskClient?.name || "Unknown"}
+                    </p>
 
-                  <p style={{ margin: "5px 0" }}>
-                    Due:{" "}
-                    {task.due_date
-                      ? new Date(
-                          task.due_date
-                        ).toLocaleString()
-                      : "No due date"}
-                  </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Due: {formatDate(task.due_date)}
+                    </p>
+                  </div>
 
-                  <p style={{ margin: "5px 0" }}>
-                    Status:{" "}
-                    <strong>{task.status}</strong>
-                  </p>
+                  <span
+                    className={`self-start rounded-full px-3 py-1.5 text-xs font-semibold capitalize md:self-center ${
+                      statusStyles(task.status)
+                    }`}
+                  >
+                    {task.status || "Unknown"}
+                  </span>
                 </div>
-              )
-            })
-          )}
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      {/* Recent Activities */}
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+        <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
+          <h2 className="text-lg font-bold text-slate-900">
+            Recent Activities
+          </h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Recent activity history for assigned clients.
+          </p>
         </div>
 
-      </div>
-
-      {/* =========================
-          ACTIVITIES
-      ========================= */}
-      <div>
-
-        <h2>Recent Activities</h2>
-
-        <div style={{ marginTop: "15px" }}>
-
-          {activities.length === 0 ? (
-            <p>No activities found.</p>
-          ) : (
-            activities.map((activity) => {
-
+        {activities.length === 0 ? (
+          <div className="px-5 py-12 text-center text-sm text-slate-500">
+            No activities found.
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {activities.map((activity) => {
               const activityClient = clients.find(
                 (client) =>
-                  client.id === activity.client_id
-              )
+                  String(client.id) === String(activity.client_id)
+              );
 
               return (
                 <div
                   key={activity.id}
-                  style={{
-                    borderLeft: "3px solid #ddd",
-                    padding: "10px 15px",
-                    marginBottom: "15px"
-                  }}
+                  className="flex gap-4 px-5 py-5 sm:px-6"
                 >
-                  <strong>
-                    {activity.type}
-                  </strong>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      className="h-5 w-5"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"
+                      />
+                    </svg>
+                  </div>
 
-                  <p style={{ margin: "5px 0" }}>
-                    {activity.description}
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold capitalize text-slate-900">
+                        {(activity.type || "Activity").replace(/_/g, " ")}
+                      </h3>
 
-                  <small>
-                    Client:{" "}
-                    {activityClient?.name || "Unknown"}
-                  </small>
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">
+                        {activityClient?.name || "Unknown client"}
+                      </span>
+                    </div>
 
-                  <br />
+                    <p className="mt-2 break-words text-sm leading-6 text-slate-600">
+                      {activity.description || "No description available."}
+                    </p>
 
-                  <small>
-                    {activity.created_at
-                      ? new Date(
-                          activity.created_at
-                        ).toLocaleString()
-                      : ""}
-                  </small>
+                    <p className="mt-2 text-xs text-slate-400">
+                      {activity.created_at
+                        ? formatDate(activity.created_at)
+                        : ""}
+                    </p>
+                  </div>
                 </div>
-              )
-            })
-          )}
-
-        </div>
-
-      </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
     </div>
-  )
+  );
 }

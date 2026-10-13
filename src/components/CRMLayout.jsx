@@ -45,59 +45,75 @@ function CRMLayout() {
   };
 
   return (
-    <div className="crm-layout">
+    <div className="min-h-screen bg-[#f7f8fa]">
       {/* Sidebar */}
       <Sidebar />
 
       {/* Main Area */}
-      <div className="crm-main">
+      <div className="ml-[70px] min-h-screen min-[769px]:ml-[250px]">
         {/* Header */}
-        <header className="crm-header">
-          <div className="header-left">
+        <header className="sticky top-0 z-[900] flex h-[68px] items-center justify-between border-b border-gray-200 bg-white px-3 min-[481px]:px-4 min-[769px]:h-[76px] min-[769px]:px-[30px]">
+          {/* Left */}
+          <div className="flex items-center gap-3">
             <button
-              className="mobile-menu-btn"
               onClick={() => setMobileMenu(!mobileMenu)}
+              className="hidden h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 max-[768px]:flex"
             >
               ☰
             </button>
 
             <div>
-              <h1>{getPageTitle()}</h1>
-              <p>Manage your business from one place</p>
+              <h1 className="text-[18px] font-bold leading-tight text-gray-900 min-[769px]:text-[22px]">
+                {getPageTitle()}
+              </h1>
+              <p className="mt-1 hidden text-xs text-gray-400 min-[769px]:block">
+                Manage your business from one place
+              </p>
             </div>
           </div>
 
-          <div className="header-right">
+          {/* Right */}
+          <div className="flex items-center gap-[7px] min-[769px]:gap-3">
             {/* Search */}
-            <div className="header-search">
-              <span>⌕</span>
+            <div className="hidden h-[38px] w-[200px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 min-[1001px]:flex">
+              <span className="text-lg text-gray-400">⌕</span>
 
               <input
                 type="text"
                 placeholder="Search..."
                 onChange={() => {}}
+                className="w-full bg-transparent text-sm text-gray-700 outline-none placeholder:text-gray-400"
               />
             </div>
 
             {/* Notification */}
-            <button className="header-icon-btn" title="Notifications">
+            <button
+              title="Notifications"
+              className="relative h-[34px] w-[34px] rounded-lg border border-gray-200 bg-white text-[17px] text-gray-500 transition hover:bg-gray-50 min-[481px]:h-[38px] min-[481px]:w-[38px]"
+            >
               ♧
-              <span className="notification-dot"></span>
+              <span className="absolute right-2 top-2 h-[6px] w-[6px] rounded-full bg-red-500"></span>
             </button>
 
             {/* User */}
-            <div className="header-user">
-              <div className="header-avatar">A</div>
+            <div className="flex items-center gap-[10px] min-[769px]:border-l min-[769px]:border-gray-200 min-[769px]:pl-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-[13px] font-bold text-white min-[481px]:h-[34px] min-[481px]:w-[34px]">
+                A
+              </div>
 
-              <div className="header-user-info">
-                <strong>Admin</strong>
-                <span>{userEmail || "Administrator"}</span>
+              <div className="hidden max-w-[160px] flex-col min-[1001px]:flex">
+                <strong className="text-[13px] font-semibold text-gray-900">
+                  Admin
+                </strong>
+                <span className="mt-0.5 truncate text-xs text-gray-400">
+                  {userEmail || "Administrator"}
+                </span>
               </div>
 
               <button
-                className="logout-btn"
                 onClick={handleLogout}
                 title="Logout"
+                className="hidden h-8 w-8 rounded-[7px] text-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 min-[481px]:block"
               >
                 ↪
               </button>
@@ -106,7 +122,7 @@ function CRMLayout() {
         </header>
 
         {/* Page Content */}
-        <main className="crm-content">
+        <main className="mx-auto max-w-[1600px] px-3 pb-[25px] pt-4 min-[481px]:px-4 min-[481px]:pb-[30px] min-[481px]:pt-5 min-[769px]:px-[30px] min-[769px]:pb-10 min-[769px]:pt-7">
           <Outlet />
         </main>
       </div>
@@ -114,304 +130,10 @@ function CRMLayout() {
       {/* Mobile Overlay */}
       {mobileMenu && (
         <div
-          className="mobile-overlay"
+          className="fixed inset-0 z-[950] bg-black/30"
           onClick={() => setMobileMenu(false)}
         ></div>
       )}
-
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        .crm-layout {
-          min-height: 100vh;
-          background: #f7f8fa;
-        }
-
-        .crm-main {
-          min-height: 100vh;
-          margin-left: 250px;
-        }
-
-        .crm-header {
-          height: 76px;
-
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-
-          padding: 0 30px;
-
-          background: #ffffff;
-          border-bottom: 1px solid #e5e7eb;
-
-          position: sticky;
-          top: 0;
-          z-index: 900;
-        }
-
-        .header-left {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .header-left h1 {
-          margin: 0;
-
-          color: #111827;
-          font-size: 20px;
-          font-weight: 700;
-          line-height: 1.2;
-        }
-
-        .header-left p {
-          margin: 4px 0 0;
-
-          color: #9ca3af;
-          font-size: 11px;
-        }
-
-        .header-right {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .header-search {
-          width: 190px;
-          height: 38px;
-
-          display: flex;
-          align-items: center;
-          gap: 7px;
-
-          padding: 0 11px;
-
-          background: #f8f9fb;
-          border: 1px solid #eceef1;
-          border-radius: 8px;
-        }
-
-        .header-search span {
-          color: #9ca3af;
-          font-size: 18px;
-        }
-
-        .header-search input {
-          width: 100%;
-
-          border: none;
-          outline: none;
-          background: transparent;
-
-          color: #374151;
-          font-size: 12px;
-        }
-
-        .header-search input::placeholder {
-          color: #a1a1aa;
-        }
-
-        .header-icon-btn {
-          width: 38px;
-          height: 38px;
-
-          position: relative;
-
-          border: 1px solid #eceef1;
-          border-radius: 8px;
-
-          background: #ffffff;
-          color: #6b7280;
-
-          cursor: pointer;
-
-          font-size: 17px;
-        }
-
-        .header-icon-btn:hover {
-          background: #f8f9fb;
-        }
-
-        .notification-dot {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-
-          width: 5px;
-          height: 5px;
-
-          border-radius: 50%;
-          background: #ef4444;
-        }
-
-        .header-user {
-          display: flex;
-          align-items: center;
-          gap: 9px;
-
-          padding-left: 8px;
-          border-left: 1px solid #e5e7eb;
-        }
-
-        .header-avatar {
-          width: 34px;
-          height: 34px;
-
-          display: flex;
-          align-items: center;
-          justify-content: center;
-
-          border-radius: 50%;
-
-          background: #111827;
-          color: #ffffff;
-
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .header-user-info {
-          display: flex;
-          flex-direction: column;
-
-          max-width: 150px;
-        }
-
-        .header-user-info strong {
-          color: #111827;
-          font-size: 11px;
-          font-weight: 600;
-        }
-
-        .header-user-info span {
-          margin-top: 2px;
-
-          color: #9ca3af;
-          font-size: 9px;
-
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-
-        .logout-btn {
-          width: 32px;
-          height: 32px;
-
-          border: none;
-          border-radius: 7px;
-
-          background: transparent;
-          color: #9ca3af;
-
-          cursor: pointer;
-
-          font-size: 18px;
-        }
-
-        .logout-btn:hover {
-          background: #fef2f2;
-          color: #dc2626;
-        }
-
-        .crm-content {
-          padding: 28px 30px 40px;
-          max-width: 1600px;
-          margin: 0 auto;
-        }
-
-        .mobile-menu-btn {
-          display: none;
-
-          width: 36px;
-          height: 36px;
-
-          border: 1px solid #e5e7eb;
-          border-radius: 8px;
-
-          background: #ffffff;
-          color: #374151;
-
-          cursor: pointer;
-        }
-
-        .mobile-overlay {
-          display: none;
-        }
-
-        @media (max-width: 1000px) {
-          .header-search {
-            display: none;
-          }
-
-          .header-user-info {
-            display: none;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .crm-main {
-            margin-left: 70px;
-          }
-
-          .crm-header {
-            height: 68px;
-            padding: 0 16px;
-          }
-
-          .mobile-menu-btn {
-            display: block;
-          }
-
-          .header-left h1 {
-            font-size: 17px;
-          }
-
-          .header-left p {
-            display: none;
-          }
-
-          .crm-content {
-            padding: 20px 16px 30px;
-          }
-
-          .header-right {
-            gap: 7px;
-          }
-
-          .header-user {
-            border-left: none;
-            padding-left: 0;
-          }
-        }
-
-        @media (max-width: 480px) {
-          .crm-header {
-            padding: 0 12px;
-          }
-
-          .crm-content {
-            padding: 16px 12px 25px;
-          }
-
-          .header-icon-btn {
-            width: 34px;
-            height: 34px;
-          }
-
-          .header-avatar {
-            width: 32px;
-            height: 32px;
-          }
-
-          .logout-btn {
-            display: none;
-          }
-        }
-      `}</style>
     </div>
   );
 }

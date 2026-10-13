@@ -2,6 +2,30 @@ import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 
+const PanelHeader = ({ title, text, to, linkText }) => (
+  <div className="mb-5 flex items-start justify-between gap-4">
+    <div>
+      <h2 className="text-base font-bold tracking-tight">{title}</h2>
+      <p className="mt-1 text-xs text-slate-400">{text}</p>
+    </div>
+
+    {to && (
+      <Link
+        to={to}
+        className="whitespace-nowrap text-xs font-semibold text-blue-600 no-underline hover:text-blue-700"
+      >
+        {linkText}
+      </Link>
+    )}
+  </div>
+)
+
+const Empty = ({ children }) => (
+  <div className="px-2.5 py-6 text-center text-[13px] text-slate-400">
+    {children}
+  </div>
+)
+
 export default function Dashboard() {
   const [clients, setClients] = useState([])
   const [tasks, setTasks] = useState([])
@@ -158,1308 +182,295 @@ export default function Dashboard() {
   }
 
   // =========================
+  // STYLES (Tailwind)
+  // =========================
+
+  const panel = "rounded-2xl border border-slate-200 bg-white p-[22px] shadow-sm max-[700px]:p-[17px]"
+
+  const tones = {
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-emerald-50 text-emerald-600",
+    purple: "bg-violet-50 text-violet-600",
+    orange: "bg-orange-50 text-orange-600",
+  }
+
+  const statCards = [
+    { label: "Total Clients", value: totalClients, icon: "◉", tone: "blue", note: "All clients", rest: "in CRM", noteClass: "text-emerald-600" },
+    { label: "Active Clients", value: activeClients, icon: "↗", tone: "green", note: "Active", rest: "projects", noteClass: "text-emerald-600" },
+    { label: "Delivered", value: deliveredClients, icon: "✓", tone: "purple", note: "Completed", rest: "projects", noteClass: "text-emerald-600" },
+    { label: "Pending Tasks", value: pendingTasks, icon: "!", tone: "orange", note: "Needs attention", rest: "", noteClass: "text-orange-600" },
+  ]
+
+  const pipelineRows = [
+    { label: "Discovery", value: discoveryClients, dot: "bg-slate-500" },
+    { label: "Signed", value: signedClients, dot: "bg-violet-500" },
+    { label: "Active", value: activeClients, dot: "bg-emerald-500" },
+    { label: "Delivered", value: deliveredClients, dot: "bg-blue-600" },
+  ]
+
+  const quickActions = [
+    { to: "/clients", tone: "blue", icon: "+", title: "Add Client", text: "Create a new client" },
+    { to: "/team-members", tone: "green", icon: "+", title: "Add Team Member", text: "Add someone to your team" },
+    { to: "/pipeline", tone: "purple", icon: "↗", title: "Open Pipeline", text: "Manage client stages" },
+    { to: "/tasks", tone: "orange", icon: "✓", title: "View Tasks", text: "Check pending work" },
+  ]
+
+  // =========================
   // LOADING
   // =========================
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading dashboard...</p>
-
-        <style>{`
-          .dashboard-loading {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            background: #f6f8fb;
-            color: #64748b;
-            font-family: Inter, Arial, sans-serif;
-          }
-
-          .loading-spinner {
-            width: 38px;
-            height: 38px;
-            border: 3px solid #e2e8f0;
-            border-top-color: #2563eb;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            margin-bottom: 14px;
-          }
-
-          @keyframes spin {
-            to {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
+      <div className="flex min-h-[60vh] flex-col items-center justify-center text-slate-500">
+        <div className="mb-3.5 h-[38px] w-[38px] animate-spin rounded-full border-[3px] border-slate-200 border-t-blue-600"></div>
+        <p className="text-sm">Loading dashboard...</p>
       </div>
     )
   }
 
   return (
-    <div className="dashboard-page">
+    <div className="w-full text-slate-900">
 
-      {/* =========================
-          HEADER
-      ========================= */}
-
-      <div className="dashboard-header">
-
+      {/* HEADER */}
+      <div className="mb-[30px] flex items-end justify-between gap-6 max-[700px]:flex-col max-[700px]:items-start">
         <div>
-          <div className="eyebrow">
+          <div className="mb-2 text-xs font-bold tracking-[0.12em] text-slate-500">
             CRM OVERVIEW
           </div>
 
-          <h1>
+          <h1 className="text-[26px] font-bold leading-tight tracking-tight min-[701px]:text-[28px]">
             Dashboard
           </h1>
 
-          <p>
+          <p className="mt-2 text-sm text-slate-500">
             Keep track of your clients, tasks and team activity.
           </p>
         </div>
 
-        <div className="header-actions">
-
+        <div className="flex gap-2.5 max-[700px]:w-full">
           <Link
             to="/clients"
-            className="secondary-button"
+            className="rounded-[9px] border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 no-underline transition hover:bg-slate-50 max-[700px]:flex-1"
           >
             View Clients
           </Link>
 
           <Link
             to="/clients"
-            className="primary-button"
+            className="rounded-[9px] bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white no-underline shadow-[0_5px_15px_rgba(37,99,235,0.18)] transition hover:-translate-y-px hover:bg-blue-700 max-[700px]:flex-1"
           >
             + Add Client
           </Link>
-
         </div>
-
       </div>
 
+      {/* STAT CARDS */}
+      <div className="mb-5 grid grid-cols-1 gap-4 min-[701px]:grid-cols-2 min-[1101px]:grid-cols-4">
+        {statCards.map((card) => (
+          <div key={card.label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-semibold text-slate-500">{card.label}</span>
+              <div className={`flex h-9 w-9 items-center justify-center rounded-[9px] font-bold ${tones[card.tone]}`}>
+                {card.icon}
+              </div>
+            </div>
 
-      {/* =========================
-          STAT CARDS
-      ========================= */}
+            <div className="mt-[18px] text-[28px] font-bold tracking-tight">{card.value}</div>
 
-      <div className="stats-grid">
-
-        <div className="stat-card">
-
-          <div className="stat-top">
-            <span className="stat-label">
-              Total Clients
-            </span>
-
-            <div className="stat-icon blue">
-              ◉
+            <div className="mt-1.5 flex gap-1.5 text-xs text-slate-400">
+              <span className={`font-semibold ${card.noteClass}`}>{card.note}</span>
+              {card.rest && <span>{card.rest}</span>}
             </div>
           </div>
-
-          <div className="stat-value">
-            {totalClients}
-          </div>
-
-          <div className="stat-bottom">
-            <span className="positive">
-              All clients
-            </span>
-
-            <span>
-              in CRM
-            </span>
-          </div>
-
-        </div>
-
-
-        <div className="stat-card">
-
-          <div className="stat-top">
-            <span className="stat-label">
-              Active Clients
-            </span>
-
-            <div className="stat-icon green">
-              ↗
-            </div>
-          </div>
-
-          <div className="stat-value">
-            {activeClients}
-          </div>
-
-          <div className="stat-bottom">
-            <span className="positive">
-              Active
-            </span>
-
-            <span>
-              projects
-            </span>
-          </div>
-
-        </div>
-
-
-        <div className="stat-card">
-
-          <div className="stat-top">
-            <span className="stat-label">
-              Delivered
-            </span>
-
-            <div className="stat-icon purple">
-              ✓
-            </div>
-          </div>
-
-          <div className="stat-value">
-            {deliveredClients}
-          </div>
-
-          <div className="stat-bottom">
-            <span className="positive">
-              Completed
-            </span>
-
-            <span>
-              projects
-            </span>
-          </div>
-
-        </div>
-
-
-        <div className="stat-card">
-
-          <div className="stat-top">
-            <span className="stat-label">
-              Pending Tasks
-            </span>
-
-            <div className="stat-icon orange">
-              !
-            </div>
-          </div>
-
-          <div className="stat-value">
-            {pendingTasks}
-          </div>
-
-          <div className="stat-bottom">
-            <span className="warning">
-              Needs attention
-            </span>
-          </div>
-
-        </div>
-
+        ))}
       </div>
 
-
-      {/* =========================
-          MAIN GRID
-      ========================= */}
-
-      <div className="main-grid">
+      {/* MAIN GRID */}
+      <div className="mb-5 grid grid-cols-1 gap-5 min-[1101px]:grid-cols-2">
 
         {/* PIPELINE */}
+        <div className={panel}>
+          <PanelHeader
+            title="Client Pipeline"
+            text="Current distribution of your clients"
+            to="/pipeline"
+            linkText="View Pipeline →"
+          />
 
-        <div className="panel">
-
-          <div className="panel-header">
-
-            <div>
-              <h2>
-                Client Pipeline
-              </h2>
-
-              <p>
-                Current distribution of your clients
-              </p>
-            </div>
-
-            <Link
-              to="/pipeline"
-              className="view-link"
-            >
-              View Pipeline →
-            </Link>
-
+          <div className="flex flex-col gap-3.5">
+            {pipelineRows.map((row) => (
+              <div key={row.label} className="flex items-center justify-between rounded-[9px] bg-slate-50 px-3.5 py-3">
+                <div className="flex items-center gap-2.5 text-sm font-medium text-slate-700">
+                  <span className={`h-2.5 w-2.5 rounded-full ${row.dot}`}></span>
+                  <span>{row.label}</span>
+                </div>
+                <strong className="text-sm">{row.value}</strong>
+              </div>
+            ))}
           </div>
-
-
-          <div className="pipeline-list">
-
-            <div className="pipeline-item">
-
-              <div className="pipeline-info">
-
-                <span className="pipeline-dot discovery"></span>
-
-                <span>
-                  Discovery
-                </span>
-
-              </div>
-
-              <strong>
-                {discoveryClients}
-              </strong>
-
-            </div>
-
-
-            <div className="pipeline-item">
-
-              <div className="pipeline-info">
-
-                <span className="pipeline-dot signed"></span>
-
-                <span>
-                  Signed
-                </span>
-
-              </div>
-
-              <strong>
-                {signedClients}
-              </strong>
-
-            </div>
-
-
-            <div className="pipeline-item">
-
-              <div className="pipeline-info">
-
-                <span className="pipeline-dot active"></span>
-
-                <span>
-                  Active
-                </span>
-
-              </div>
-
-              <strong>
-                {activeClients}
-              </strong>
-
-            </div>
-
-
-            <div className="pipeline-item">
-
-              <div className="pipeline-info">
-
-                <span className="pipeline-dot delivered"></span>
-
-                <span>
-                  Delivered
-                </span>
-
-              </div>
-
-              <strong>
-                {deliveredClients}
-              </strong>
-
-            </div>
-
-          </div>
-
         </div>
 
-
         {/* TEAM WORKLOAD */}
+        <div className={panel}>
+          <PanelHeader
+            title="Team Workload"
+            text="Assigned clients and pending tasks"
+            to="/team-members"
+            linkText="View Team →"
+          />
 
-        <div className="panel">
-
-          <div className="panel-header">
-
-            <div>
-              <h2>
-                Team Workload
-              </h2>
-
-              <p>
-                Assigned clients and pending tasks
-              </p>
-            </div>
-
-            <Link
-              to="/team-members"
-              className="view-link"
-            >
-              View Team →
-            </Link>
-
-          </div>
-
-
-          <div className="team-list">
-
+          <div className="flex flex-col gap-1">
             {teamMembers.length === 0 ? (
-
-              <div className="empty-state">
-                No active team members.
-              </div>
-
+              <Empty>No active team members.</Empty>
             ) : (
-
               teamMembers.slice(0, 5).map((member) => {
-
-                const memberClients =
-                  getMemberClients(member.id)
-
-                const memberTasks =
-                  getMemberTasks(member.id)
+                const memberClients = getMemberClients(member.id)
+                const memberTasks = getMemberTasks(member.id)
 
                 return (
                   <Link
                     key={member.id}
                     to={`/team-member/${member.id}`}
-                    className="team-item"
+                    className="flex items-center gap-3 rounded-[10px] px-2 py-2.5 text-inherit no-underline transition hover:bg-slate-50"
                   >
-
-                    <div className="avatar">
-                      {member.name
-                        ? member.name
-                            .charAt(0)
-                            .toUpperCase()
-                        : "?"}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-blue-50 text-sm font-bold text-blue-600">
+                      {member.name ? member.name.charAt(0).toUpperCase() : "?"}
                     </div>
 
-                    <div className="team-info">
-
-                      <strong>
-                        {member.name}
-                      </strong>
-
-                      <span>
-                        {member.designation ||
-                          "Team Member"}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <strong className="truncate text-sm">{member.name}</strong>
+                      <span className="mt-0.5 text-xs text-slate-400">
+                        {member.designation || "Team Member"}
                       </span>
-
                     </div>
 
-                    <div className="team-stats">
-
-                      <strong>
-                        {memberClients}
-                      </strong>
-
-                      <span>
-                        clients
-                      </span>
-
+                    <div className="flex min-w-[55px] flex-col items-end">
+                      <strong className="text-sm">{memberClients}</strong>
+                      <span className="text-xs text-slate-400">clients</span>
                     </div>
 
-                    <div className="task-count">
+                    <div className="flex h-7 min-w-[28px] items-center justify-center rounded-lg bg-orange-50 text-xs font-bold text-orange-600">
                       {memberTasks}
                     </div>
-
                   </Link>
                 )
               })
-
             )}
-
           </div>
-
         </div>
-
       </div>
 
+      {/* LOWER GRID */}
+      <div className="mb-5 grid grid-cols-1 gap-5 min-[1101px]:grid-cols-2">
 
-      {/* =========================
-          LOWER GRID
-      ========================= */}
+        {/* RECENT ACTIVITY */}
+        <div className={panel}>
+          <PanelHeader title="Recent Activity" text="Latest CRM activity" />
 
-      <div className="lower-grid">
-
-        {/* RECENT ACTIVITIES */}
-
-        <div className="panel activities-panel">
-
-          <div className="panel-header">
-
-            <div>
-              <h2>
-                Recent Activity
-              </h2>
-
-              <p>
-                Latest CRM activity
-              </p>
-            </div>
-
-          </div>
-
-
-          <div className="activity-list">
-
+          <div className="flex flex-col">
             {activities.length === 0 ? (
-
-              <div className="empty-state">
-                No recent activity.
-              </div>
-
+              <Empty>No recent activity.</Empty>
             ) : (
-
               activities.map((activity) => (
-
                 <div
-                  className="activity-item"
                   key={activity.id}
+                  className="flex gap-3 border-b border-slate-100 py-3.5 last:border-b-0"
                 >
-
-                  <div className="activity-icon">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-bold text-blue-600">
                     {getActivityIcon(activity.type)}
                   </div>
 
-                  <div className="activity-content">
-
-                    <strong>
+                  <div className="flex flex-col gap-1">
+                    <strong className="text-[13px] font-semibold leading-snug">
                       {activity.description}
                     </strong>
-
-                    <span>
-                      {getActivityTime(
-                        activity.created_at
-                      )}
+                    <span className="text-xs text-slate-400">
+                      {getActivityTime(activity.created_at)}
                     </span>
-
                   </div>
-
                 </div>
-
               ))
-
             )}
-
           </div>
-
         </div>
-
 
         {/* QUICK ACTIONS */}
+        <div className={panel}>
+          <PanelHeader title="Quick Actions" text="Common CRM actions" />
 
-        <div className="panel">
+          <div className="flex flex-col">
+            {quickActions.map((action) => (
+              <Link
+                key={action.title}
+                to={action.to}
+                className="flex items-center gap-3 border-b border-slate-100 py-3.5 text-inherit no-underline transition last:border-b-0 hover:bg-slate-50"
+              >
+                <div className={`flex h-9 w-9 items-center justify-center rounded-[9px] font-bold ${tones[action.tone]}`}>
+                  {action.icon}
+                </div>
 
-          <div className="panel-header">
+                <div className="flex flex-1 flex-col gap-0.5">
+                  <strong className="text-[13px]">{action.title}</strong>
+                  <span className="text-xs text-slate-400">{action.text}</span>
+                </div>
 
-            <div>
-              <h2>
-                Quick Actions
-              </h2>
-
-              <p>
-                Common CRM actions
-              </p>
-            </div>
-
+                <span className="text-base text-slate-400">→</span>
+              </Link>
+            ))}
           </div>
-
-
-          <div className="quick-actions">
-
-            <Link
-              to="/clients"
-              className="quick-action"
-            >
-
-              <div className="quick-icon blue">
-                +
-              </div>
-
-              <div>
-                <strong>
-                  Add Client
-                </strong>
-
-                <span>
-                  Create a new client
-                </span>
-              </div>
-
-              <span className="arrow">
-                →
-              </span>
-
-            </Link>
-
-
-            <Link
-              to="/team-members"
-              className="quick-action"
-            >
-
-              <div className="quick-icon green">
-                +
-              </div>
-
-              <div>
-                <strong>
-                  Add Team Member
-                </strong>
-
-                <span>
-                  Add someone to your team
-                </span>
-              </div>
-
-              <span className="arrow">
-                →
-              </span>
-
-            </Link>
-
-
-            <Link
-              to="/pipeline"
-              className="quick-action"
-            >
-
-              <div className="quick-icon purple">
-                ↗
-              </div>
-
-              <div>
-                <strong>
-                  Open Pipeline
-                </strong>
-
-                <span>
-                  Manage client stages
-                </span>
-              </div>
-
-              <span className="arrow">
-                →
-              </span>
-
-            </Link>
-
-
-            <Link
-              to="/tasks"
-              className="quick-action"
-            >
-
-              <div className="quick-icon orange">
-                ✓
-              </div>
-
-              <div>
-                <strong>
-                  View Tasks
-                </strong>
-
-                <span>
-                  Check pending work
-                </span>
-              </div>
-
-              <span className="arrow">
-                →
-              </span>
-
-            </Link>
-
-          </div>
-
         </div>
-
       </div>
 
+      {/* RECENT CLIENTS */}
+      <div className={`${panel} mb-2.5`}>
+        <PanelHeader
+          title="Recent Clients"
+          text="Recently added clients"
+          to="/clients"
+          linkText="View All →"
+        />
 
-      {/* =========================
-          RECENT CLIENTS
-      ========================= */}
-
-      <div className="panel recent-clients-panel">
-
-        <div className="panel-header">
-
-          <div>
-            <h2>
-              Recent Clients
-            </h2>
-
-            <p>
-              Recently added clients
-            </p>
-          </div>
-
-          <Link
-            to="/clients"
-            className="view-link"
-          >
-            View All →
-          </Link>
-
-        </div>
-
-
-        <div className="recent-client-list">
-
+        <div className="flex flex-col">
           {clients.length === 0 ? (
-
-            <div className="empty-state">
-              No clients found.
-            </div>
-
+            <Empty>No clients found.</Empty>
           ) : (
-
             clients.slice(0, 5).map((client) => {
-
-              const assignedMember =
-                teamMembers.find(
-                  (member) =>
-                    member.id ===
-                    client.assigned_to
-                )
+              const assignedMember = teamMembers.find(
+                (member) => member.id === client.assigned_to
+              )
 
               return (
                 <Link
                   key={client.id}
                   to={`/client/${client.id}`}
-                  className="recent-client"
+                  className="flex items-center gap-3.5 border-t border-slate-100 px-2 py-3.5 text-inherit no-underline transition hover:bg-slate-50 max-[700px]:gap-2.5"
                 >
-
-                  <div className="client-avatar">
-                    {client.name
-                      ? client.name
-                          .charAt(0)
-                          .toUpperCase()
-                      : "?"}
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-blue-50 text-sm font-bold text-blue-600">
+                    {client.name ? client.name.charAt(0).toUpperCase() : "?"}
                   </div>
 
-                  <div className="client-main">
-
-                    <strong>
-                      {client.name}
-                    </strong>
-
-                    <span>
-                      {client.company ||
-                        client.email}
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                    <strong className="truncate text-sm">{client.name}</strong>
+                    <span className="truncate text-xs text-slate-400">
+                      {client.company || client.email}
                     </span>
-
                   </div>
 
-                  <div className="client-stage">
-                    {getStageLabel(
-                      client.stage
-                    )}
+                  <div className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 max-[700px]:hidden">
+                    {getStageLabel(client.stage)}
                   </div>
 
-                  <div className="assigned-member">
-
-                    {assignedMember
-                      ? assignedMember.name
-                      : "Unassigned"}
-
+                  <div className="w-[100px] truncate text-xs text-slate-500 max-[700px]:hidden">
+                    {assignedMember ? assignedMember.name : "Unassigned"}
                   </div>
 
-                  <span className="client-arrow">
-                    →
-                  </span>
-
+                  <span className="text-[15px] text-slate-400">→</span>
                 </Link>
               )
             })
-
           )}
-
         </div>
-
       </div>
-
-
-      {/* =========================
-          STYLES
-      ========================= */}
-
-      <style>{`
-
-        * {
-          box-sizing: border-box;
-        }
-
-        .dashboard-page {
-          min-height: 100vh;
-          background: #f6f8fb;
-          padding: 34px;
-          color: #0f172a;
-          font-family: Inter, -apple-system, BlinkMacSystemFont,
-            "Segoe UI", sans-serif;
-        }
-
-        .dashboard-header {
-          display: flex;
-          align-items: flex-end;
-          justify-content: space-between;
-          gap: 25px;
-          margin-bottom: 30px;
-        }
-
-        .eyebrow {
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 1.5px;
-          color: #64748b;
-          margin-bottom: 8px;
-        }
-
-        .dashboard-header h1 {
-          margin: 0;
-          font-size: 32px;
-          line-height: 1.15;
-          letter-spacing: -0.8px;
-        }
-
-        .dashboard-header p {
-          margin: 9px 0 0;
-          color: #64748b;
-          font-size: 14px;
-        }
-
-        .header-actions {
-          display: flex;
-          gap: 10px;
-        }
-
-        .primary-button,
-        .secondary-button {
-          text-decoration: none;
-          padding: 11px 16px;
-          border-radius: 9px;
-          font-size: 13px;
-          font-weight: 600;
-          transition: 0.2s ease;
-        }
-
-        .primary-button {
-          background: #2563eb;
-          color: white;
-          box-shadow: 0 5px 15px rgba(37, 99, 235, 0.18);
-        }
-
-        .primary-button:hover {
-          background: #1d4ed8;
-          transform: translateY(-1px);
-        }
-
-        .secondary-button {
-          background: white;
-          color: #334155;
-          border: 1px solid #e2e8f0;
-        }
-
-        .secondary-button:hover {
-          background: #f8fafc;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 16px;
-          margin-bottom: 20px;
-        }
-
-        .stat-card {
-          background: white;
-          border: 1px solid #e8edf3;
-          border-radius: 15px;
-          padding: 20px;
-          box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
-        }
-
-        .stat-top {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-
-        .stat-label {
-          color: #64748b;
-          font-size: 13px;
-          font-weight: 600;
-        }
-
-        .stat-icon {
-          width: 34px;
-          height: 34px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 9px;
-          font-weight: 700;
-        }
-
-        .stat-icon.blue,
-        .quick-icon.blue {
-          background: #eff6ff;
-          color: #2563eb;
-        }
-
-        .stat-icon.green,
-        .quick-icon.green {
-          background: #ecfdf5;
-          color: #059669;
-        }
-
-        .stat-icon.purple,
-        .quick-icon.purple {
-          background: #f5f3ff;
-          color: #7c3aed;
-        }
-
-        .stat-icon.orange,
-        .quick-icon.orange {
-          background: #fff7ed;
-          color: #ea580c;
-        }
-
-        .stat-value {
-          font-size: 30px;
-          font-weight: 750;
-          letter-spacing: -1px;
-          margin-top: 18px;
-        }
-
-        .stat-bottom {
-          display: flex;
-          gap: 5px;
-          margin-top: 7px;
-          font-size: 12px;
-          color: #94a3b8;
-        }
-
-        .positive {
-          color: #059669;
-          font-weight: 600;
-        }
-
-        .warning {
-          color: #ea580c;
-          font-weight: 600;
-        }
-
-        .main-grid,
-        .lower-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 20px;
-          margin-bottom: 20px;
-        }
-
-        .panel {
-          background: white;
-          border: 1px solid #e8edf3;
-          border-radius: 15px;
-          padding: 22px;
-          box-shadow: 0 3px 12px rgba(15, 23, 42, 0.035);
-        }
-
-        .panel-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          gap: 15px;
-          margin-bottom: 20px;
-        }
-
-        .panel-header h2 {
-          margin: 0;
-          font-size: 16px;
-          letter-spacing: -0.2px;
-        }
-
-        .panel-header p {
-          margin: 5px 0 0;
-          color: #94a3b8;
-          font-size: 12px;
-        }
-
-        .view-link {
-          color: #2563eb;
-          text-decoration: none;
-          font-size: 12px;
-          font-weight: 600;
-          white-space: nowrap;
-        }
-
-        .pipeline-list {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        .pipeline-item {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 12px 13px;
-          background: #f8fafc;
-          border-radius: 9px;
-        }
-
-        .pipeline-info {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13px;
-          color: #334155;
-          font-weight: 500;
-        }
-
-        .pipeline-dot {
-          width: 9px;
-          height: 9px;
-          border-radius: 50%;
-        }
-
-        .pipeline-dot.discovery {
-          background: #64748b;
-        }
-
-        .pipeline-dot.signed {
-          background: #8b5cf6;
-        }
-
-        .pipeline-dot.active {
-          background: #10b981;
-        }
-
-        .pipeline-dot.delivered {
-          background: #2563eb;
-        }
-
-        .pipeline-item strong {
-          font-size: 14px;
-        }
-
-        .team-list {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .team-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 8px;
-          border-radius: 10px;
-          text-decoration: none;
-          color: inherit;
-          transition: 0.2s ease;
-        }
-
-        .team-item:hover {
-          background: #f8fafc;
-        }
-
-        .avatar,
-        .client-avatar {
-          flex-shrink: 0;
-          width: 38px;
-          height: 38px;
-          border-radius: 10px;
-          background: #eff6ff;
-          color: #2563eb;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .team-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          min-width: 0;
-        }
-
-        .team-info strong {
-          font-size: 13px;
-        }
-
-        .team-info span {
-          font-size: 11px;
-          color: #94a3b8;
-          margin-top: 2px;
-        }
-
-        .team-stats {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-end;
-          min-width: 55px;
-        }
-
-        .team-stats strong {
-          font-size: 13px;
-        }
-
-        .team-stats span {
-          color: #94a3b8;
-          font-size: 10px;
-        }
-
-        .task-count {
-          min-width: 28px;
-          height: 28px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 8px;
-          background: #fff7ed;
-          color: #ea580c;
-          font-size: 12px;
-          font-weight: 700;
-        }
-
-        .activity-list {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .activity-item {
-          display: flex;
-          gap: 12px;
-          padding: 13px 0;
-          border-bottom: 1px solid #f1f5f9;
-        }
-
-        .activity-item:last-child {
-          border-bottom: none;
-        }
-
-        .activity-icon {
-          width: 30px;
-          height: 30px;
-          flex-shrink: 0;
-          border-radius: 8px;
-          background: #eff6ff;
-          color: #2563eb;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 13px;
-          font-weight: 700;
-        }
-
-        .activity-content {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-
-        .activity-content strong {
-          font-size: 12px;
-          font-weight: 600;
-          line-height: 1.4;
-        }
-
-        .activity-content span {
-          color: #94a3b8;
-          font-size: 10px;
-        }
-
-        .quick-actions {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .quick-action {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 13px 0;
-          text-decoration: none;
-          color: inherit;
-          border-bottom: 1px solid #f1f5f9;
-        }
-
-        .quick-action:last-child {
-          border-bottom: none;
-        }
-
-        .quick-icon {
-          width: 35px;
-          height: 35px;
-          border-radius: 9px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-        }
-
-        .quick-action > div:nth-child(2) {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .quick-action strong {
-          font-size: 12px;
-        }
-
-        .quick-action span {
-          color: #94a3b8;
-          font-size: 10px;
-        }
-
-        .quick-action .arrow {
-          color: #94a3b8;
-          font-size: 16px;
-        }
-
-        .recent-clients-panel {
-          margin-bottom: 10px;
-        }
-
-        .recent-client-list {
-          display: flex;
-          flex-direction: column;
-        }
-
-        .recent-client {
-          display: flex;
-          align-items: center;
-          gap: 13px;
-          padding: 13px 8px;
-          border-top: 1px solid #f1f5f9;
-          text-decoration: none;
-          color: inherit;
-          transition: 0.2s ease;
-        }
-
-        .recent-client:hover {
-          background: #f8fafc;
-        }
-
-        .client-main {
-          flex: 1;
-          min-width: 0;
-          display: flex;
-          flex-direction: column;
-          gap: 3px;
-        }
-
-        .client-main strong {
-          font-size: 13px;
-        }
-
-        .client-main span {
-          color: #94a3b8;
-          font-size: 11px;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .client-stage {
-          padding: 5px 9px;
-          background: #f1f5f9;
-          border-radius: 6px;
-          font-size: 10px;
-          font-weight: 600;
-          color: #475569;
-        }
-
-        .assigned-member {
-          width: 90px;
-          font-size: 11px;
-          color: #64748b;
-        }
-
-        .client-arrow {
-          color: #94a3b8;
-          font-size: 15px;
-        }
-
-        .empty-state {
-          padding: 25px 10px;
-          text-align: center;
-          color: #94a3b8;
-          font-size: 12px;
-        }
-
-        @media (max-width: 1100px) {
-
-          .stats-grid {
-            grid-template-columns: repeat(2, 1fr);
-          }
-
-          .main-grid,
-          .lower-grid {
-            grid-template-columns: 1fr;
-          }
-
-        }
-
-        @media (max-width: 700px) {
-
-          .dashboard-page {
-            padding: 20px 14px;
-          }
-
-          .dashboard-header {
-            align-items: flex-start;
-            flex-direction: column;
-          }
-
-          .dashboard-header h1 {
-            font-size: 26px;
-          }
-
-          .header-actions {
-            width: 100%;
-          }
-
-          .primary-button,
-          .secondary-button {
-            flex: 1;
-            text-align: center;
-          }
-
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .panel {
-            padding: 17px;
-          }
-
-          .assigned-member {
-            display: none;
-          }
-
-          .client-stage {
-            display: none;
-          }
-
-          .recent-client {
-            gap: 9px;
-          }
-
-        }
-
-      `}</style>
-
     </div>
   )
 }
