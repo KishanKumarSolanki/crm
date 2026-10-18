@@ -10,6 +10,7 @@ import TeamMembers from "./pages/TeamMembers"
 import TeamMemberDetail from "./pages/TeamMemberDetail"
 
 import ProtectedRoute from "./components/ProtectedRoute"
+import AdminRoute from "./components/AdminRoute"
 import CRMLayout from "./components/CRMLayout"
 
 function App() {
@@ -78,14 +79,22 @@ function App() {
           {/* TEAM MEMBERS */}
           <Route
             path="/team-members"
-            element={<TeamMembers />}
+            element={
+              <AdminRoute>
+                <TeamMembers />
+              </AdminRoute>
+            }
           />
 
 
           {/* TEAM MEMBER DETAIL */}
           <Route
             path="/team-member/:id"
-            element={<TeamMemberDetail />}
+            element={
+              <AdminRoute>
+                <TeamMemberDetail />
+              </AdminRoute>
+            }
           />
 
         </Route>

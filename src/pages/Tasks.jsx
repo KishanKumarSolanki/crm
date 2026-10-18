@@ -1,402 +1,376 @@
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+
+const dateInputValue = (value) => {
+  if (!value) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
+  const [title, setTitle] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+  const [priority, setPriority] = useState("normal");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
 
-  const fetchTasks = async () => {
-    setLoading(true);
-    setError("");
+  const loadTaskRecords = useCallback(() => Promise.all([
+      supabase
+        .from("tasks")
+        .select("*")
+        .order("due_date", { ascending: true }),
+      supabase
+        .from("clients")
+        .select("id, name, company")
+        .order("name", { ascending: true }),
+      supabase
+        .from("team_members")
+        .select("id, name")
+        .eq("status", "active")
+        .order("name", { ascending: true }),
+    ]), []);
 
-    const { data, error } = await supabase
-      .from("tasks")
-      .select("*")
-      .order("due_date", { ascending: true });
-
-    if (error) {
-      setError(error.message);
+  const applyTaskRecords = useCallback(([tasksResult, clientsResult, membersResult]) => {
+    if (tasksResult.error) {
+      setError(`Could not load tasks: ${tasksResult.error.message}`);
     } else {
-      setTasks(data || []);
+      setTasks(tasksResult.data || []);
+    }
+
+    if (clientsResult.error) {
+      setError((current) =>
+        [current, `Could not load clients: ${clientsResult.error.message}`]
+          .filter(Boolean)
+          .join(" ")
+      );
+    } else {
+      setClients(clientsResult.data || []);
+    }
+
+    if (membersResult.error) {
+      setError((current) =>
+        [current, `Could not load team members: ${membersResult.error.message}`]
+          .filter(Boolean)
+          .join(" ")
+      );
+    } else {
+      setTeamMembers(membersResult.data || []);
     }
 
     setLoading(false);
-  };
-
-  useEffect(() => {
-    fetchTasks();
   }, []);
 
-  const markDone = async (id) => {
-    setUpdatingId(id);
-    setError("");
+  const fetchTasks = () =>
+    loadTaskRecords()
+      .then(applyTaskRecords)
+      .catch((loadError) => {
+        setError(`Could not load tasks: ${loadError.message}`);
+        setLoading(false);
+      });
 
-    const { error } = await supabase
-      .from("tasks")
-      .update({ status: "completed" })
-      .eq("id", id);
+  useEffect(() => {
+    let active = true;
+    loadTaskRecords()
+      .then((records) => {
+        if (active) applyTaskRecords(records);
+      })
+      .catch((loadError) => {
+        if (active) {
+          setError(`Could not load tasks: ${loadError.message}`);
+          setLoading(false);
+        }
+      });
+    return () => { active = false; };
+  }, [applyTaskRecords, loadTaskRecords]);
 
-    if (error) {
-      setError(error.message);
-    } else {
-      setTasks((currentTasks) =>
-        currentTasks.map((task) =>
-          task.id === id
-            ? { ...task, status: "completed" }
-            : task
-        )
-      );
+  const resetForm = () => {
+    setEditingId(null);
+    setTitle("");
+    setClientId("");
+    setDueDate("");
+    setAssignedTo("");
+    setPriority("normal");
+  };
+
+  const saveTask = async (event) => {
+    event.preventDefault();
+    if (!title.trim() || !clientId) {
+      setError("Task title and client are required.");
+      return;
     }
 
+    setSaving(true);
+    setError("");
+    const values = {
+      title: title.trim(),
+      client_id: clientId,
+      due_date: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
+      assigned_to: assignedTo || null,
+      priority,
+    };
+
+    const result = editingId
+      ? await supabase.from("tasks").update(values).eq("id", editingId)
+      : await supabase.from("tasks").insert({ ...values, status: "pending" });
+
+    if (result.error) {
+      setError(`Could not save task: ${result.error.message}`);
+      setSaving(false);
+      return;
+    }
+
+    resetForm();
+    await fetchTasks();
+    setSaving(false);
+  };
+
+  const beginEdit = (task) => {
+    setEditingId(task.id);
+    setTitle(task.title || "");
+    setClientId(task.client_id ? String(task.client_id) : "");
+    setDueDate(dateInputValue(task.due_date));
+    setAssignedTo(task.assigned_to ? String(task.assigned_to) : "");
+    setPriority(task.priority || "normal");
+    setError("");
+  };
+
+  const toggleComplete = async (task) => {
+    setUpdatingId(task.id);
+    setError("");
+    const status = task.status?.toLowerCase() === "completed" ? "pending" : "completed";
+    const { error: updateError } = await supabase
+      .from("tasks")
+      .update({ status })
+      .eq("id", task.id);
+
+    if (updateError) {
+      setError(`Could not update task: ${updateError.message}`);
+    } else {
+      setTasks((current) =>
+        current.map((item) => item.id === task.id ? { ...item, status } : item)
+      );
+    }
     setUpdatingId(null);
   };
 
-  const getStatusStyle = (status) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-        return "bg-emerald-50 text-emerald-700 ring-emerald-600/20";
-      case "pending":
-        return "bg-amber-50 text-amber-700 ring-amber-600/20";
-      case "in progress":
-        return "bg-blue-50 text-blue-700 ring-blue-600/20";
-      default:
-        return "bg-slate-100 text-slate-600 ring-slate-500/20";
+  const deleteTask = async (task) => {
+    if (!window.confirm(`Delete task "${task.title || "Untitled Task"}"?`)) return;
+
+    setUpdatingId(task.id);
+    setError("");
+    const { error: deleteError } = await supabase
+      .from("tasks")
+      .delete()
+      .eq("id", task.id);
+
+    if (deleteError) {
+      setError(`Could not delete task: ${deleteError.message}`);
+    } else {
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      if (editingId === task.id) resetForm();
     }
+    setUpdatingId(null);
   };
 
-  const formatDate = (date) => {
-    if (!date) return "No due date";
-
-    const parsedDate = new Date(date);
-
-    if (Number.isNaN(parsedDate.getTime())) {
-      return "Invalid date";
-    }
-
-    return parsedDate.toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const completedCount = tasks.filter(
-    (task) => task.status?.toLowerCase() === "completed"
-  ).length;
-
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) =>
+      statusFilter === "all" ||
+      (statusFilter === "pending"
+        ? task.status?.toLowerCase() !== "completed"
+        : task.status?.toLowerCase() === "completed")
+    ),
+    [tasks, statusFilter]
+  );
+  const completedCount = tasks.filter((task) => task.status?.toLowerCase() === "completed").length;
   const pendingCount = tasks.length - completedCount;
+  const clientById = new Map(clients.map((client) => [String(client.id), client]));
+  const memberById = new Map(teamMembers.map((member) => [String(member.id), member]));
+
+  const formatDate = (value) => {
+    if (!value) return "No due date";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Invalid date";
+    return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  };
+
+  const inputClass =
+    "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
-
-      {/* Page Header */}
-      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-
+    <div className="w-full text-slate-900">
+      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
-            CRM Management
-          </p>
-
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            Tasks & Follow-ups
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            Manage your tasks and stay on top of client follow-ups.
-          </p>
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">CRM Management</p>
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tasks & Follow-ups</h1>
+          <p className="mt-2 text-sm text-slate-500">Assign follow-ups to clients and team members, set priorities, and track completion.</p>
         </div>
-
         <button
           type="button"
-          onClick={fetchTasks}
+          onClick={() => {
+            setLoading(true);
+            fetchTasks();
+          }}
           disabled={loading}
-          className="inline-flex items-center justify-center gap-2 self-start rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 sm:self-auto"
+          className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M20 7v5h-5M4 17v-5h5"
-            />
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M5.6 9a7 7 0 0 1 12-2L20 12M4 12l2.4 5a7 7 0 0 0 12-2"
-            />
-          </svg>
-          Refresh Tasks
+          {loading ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-3">
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Total Tasks
-          </p>
-
-          <p className="mt-3 text-3xl font-bold text-slate-900">
-            {tasks.length}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-400">
-            All follow-up activities
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-amber-100 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Pending Tasks
-          </p>
-
-          <p className="mt-3 text-3xl font-bold text-amber-600">
-            {pendingCount}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-400">
-            Tasks yet to be completed
-          </p>
-        </div>
-
-        <div className="rounded-2xl border border-emerald-100 bg-white p-5 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">
-            Completed Tasks
-          </p>
-
-          <p className="mt-3 text-3xl font-bold text-emerald-600">
-            {completedCount}
-          </p>
-
-          <p className="mt-1 text-xs text-slate-400">
-            Successfully completed
-          </p>
-        </div>
+      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[
+          ["Total Tasks", tasks.length, "text-slate-900"],
+          ["Pending Tasks", pendingCount, "text-amber-600"],
+          ["Completed Tasks", completedCount, "text-emerald-600"],
+        ].map(([label, value, tone]) => (
+          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-sm font-medium text-slate-500">{label}</p>
+            <p className={`mt-3 text-3xl font-bold ${tone}`}>{value}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Task List */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <form onSubmit={saveTask} className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="mb-4 text-base font-bold">{editingId ? "Edit Task" : "Create Task"}</h2>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1fr_1fr_0.9fr_auto_auto]">
+          <label className="text-xs font-semibold text-slate-600">
+            Task title
+            <input
+              className={`${inputClass} mt-1.5`}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              required
+              placeholder="e.g. Call client"
+            />
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            Client
+            <select className={`${inputClass} mt-1.5`} value={clientId} onChange={(event) => setClientId(event.target.value)} required>
+              <option value="">Select a client</option>
+              {clients.map((client) => (
+                <option key={client.id} value={client.id}>{client.name}{client.company ? ` · ${client.company}` : ""}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            Due date
+            <input className={`${inputClass} mt-1.5`} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            Assignee
+            <select className={`${inputClass} mt-1.5`} value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
+              <option value="">Unassigned</option>
+              {teamMembers.map((member) => (
+                <option key={member.id} value={member.id}>{member.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-slate-600">
+            Priority
+            <select className={`${inputClass} mt-1.5 capitalize`} value={priority} onChange={(event) => setPriority(event.target.value)}>
+              {["low", "normal", "high", "urgent"].map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={saving || clients.length === 0}
+            className="self-end rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {saving ? "Saving..." : editingId ? "Save Changes" : "Add Task"}
+          </button>
+          {editingId && (
+            <button type="button" onClick={resetForm} className="self-end rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              Cancel
+            </button>
+          )}
+        </div>
+        {clients.length === 0 && !loading && <p className="mt-3 text-xs text-amber-700">Add a client before creating a task.</p>}
+      </form>
 
-        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
           <div>
-            <h2 className="text-base font-bold text-slate-900">
-              All Tasks
-            </h2>
-
-            <p className="mt-1 text-xs text-slate-500">
-              Tasks sorted by due date
-            </p>
+            <h2 className="text-base font-bold">All Tasks</h2>
+            <p className="mt-1 text-xs text-slate-500">Tasks are ordered by due date.</p>
           </div>
-
-          <span className="rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700">
-            {tasks.length} tasks
-          </span>
+          <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
+            Show
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-2" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+              <option value="all">All statuses</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
         </div>
 
-        {error && (
-          <div
-            role="alert"
-            className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-          >
-            {error}
-          </div>
-        )}
-
+        {error && <div role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         {loading ? (
-          <div className="flex min-h-56 items-center justify-center">
-            <div className="flex items-center gap-3 text-sm text-slate-500">
-              <span className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-600" />
-              Loading tasks...
-            </div>
-          </div>
-        ) : tasks.length === 0 ? (
-          <div className="flex min-h-64 flex-col items-center justify-center px-5 py-12 text-center">
-
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.7"
-                className="h-7 w-7"
-              >
-                <rect
-                  x="4"
-                  y="3"
-                  width="16"
-                  height="18"
-                  rx="2"
-                />
-                <path
-                  strokeLinecap="round"
-                  d="M8 8h8M8 12h8M8 16h5"
-                />
-              </svg>
-            </div>
-
-            <h3 className="text-base font-semibold text-slate-800">
-              No tasks found
-            </h3>
-
-            <p className="mt-2 max-w-sm text-sm text-slate-500">
-              Your follow-up tasks will appear here when available.
-            </p>
+          <div className="p-12 text-center text-sm text-slate-500">Loading tasks...</div>
+        ) : visibleTasks.length === 0 ? (
+          <div className="p-12 text-center text-sm text-slate-500">
+            {tasks.length === 0 ? "No tasks yet. Create a task above." : "No tasks match this status."}
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-
-            {tasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex flex-col gap-4 px-5 py-5 transition hover:bg-slate-50/70 sm:px-6 md:flex-row md:items-center md:justify-between"
-              >
-
-                {/* Task Details */}
-                <div className="flex min-w-0 flex-1 items-start gap-4">
-
-                  <div
-                    className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                      task.status?.toLowerCase() === "completed"
-                        ? "bg-emerald-50 text-emerald-600"
-                        : "bg-indigo-50 text-indigo-600"
-                    }`}
-                  >
-                    {task.status?.toLowerCase() === "completed" ? (
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        className="h-5 w-5"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="m5 12 4 4L19 6"
-                        />
-                      </svg>
-                    ) : (
-                      <svg
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        className="h-5 w-5"
-                      >
-                        <circle cx="12" cy="12" r="9" />
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          d="M12 7v5l3 2"
-                        />
-                      </svg>
-                    )}
-                  </div>
-
-                  <div className="min-w-0 flex-1">
-
-                    <h3
-                      className={`break-words text-sm font-semibold ${
-                        task.status?.toLowerCase() === "completed"
-                          ? "text-slate-500 line-through"
-                          : "text-slate-900"
-                      }`}
-                    >
+            {visibleTasks.map((task) => {
+              const linkedClient = clientById.get(String(task.client_id));
+              const completed = task.status?.toLowerCase() === "completed";
+              const overdue = !completed && task.due_date && new Date(task.due_date) < new Date();
+              return (
+                <article key={task.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h3 className={`break-words text-sm font-semibold ${completed ? "text-slate-500 line-through" : "text-slate-900"}`}>
                       {task.title || "Untitled Task"}
                     </h3>
-
-                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
-
-                      <span className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-                        <svg
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          className="h-4 w-4"
-                        >
-                          <rect
-                            x="3"
-                            y="5"
-                            width="18"
-                            height="16"
-                            rx="2"
-                          />
-                          <path
-                            strokeLinecap="round"
-                            d="M16 3v4M8 3v4M3 10h18"
-                          />
-                        </svg>
-                        Due: {formatDate(task.due_date)}
-                      </span>
-
-                      <span className="text-xs text-slate-400">
-                        Task #{task.id}
-                      </span>
+                    <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                      {linkedClient ? <Link to={`/client/${linkedClient.id}`} className="text-indigo-600 hover:underline">{linkedClient.name}</Link> : <span>Client unavailable</span>}
+                      <span>{memberById.get(String(task.assigned_to))?.name || "Unassigned"}</span>
+                      <span className={overdue ? "font-semibold text-red-600" : ""}>{overdue ? "Overdue · " : "Due · "}{formatDate(task.due_date)}</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Status and Action */}
-                <div className="flex flex-wrap items-center gap-3 pl-14 sm:pl-0">
-
-                  <span
-                    className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold capitalize ring-1 ring-inset ${getStatusStyle(
-                      task.status
-                    )}`}
-                  >
-                    {task.status || "Unknown"}
-                  </span>
-
-                  {task.status?.toLowerCase() !== "completed" && (
-                    <button
-                      type="button"
-                      onClick={() => markDone(task.id)}
-                      disabled={updatingId === task.id}
-                      className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3.5 py-2 text-xs font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {updatingId === task.id ? (
-                        <>
-                          <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                          Updating...
-                        </>
-                      ) : (
-                        <>
-                          <svg
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            className="h-4 w-4"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="m5 12 4 4L19 6"
-                            />
-                          </svg>
-                          Mark as Done
-                        </>
-                      )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
+                      task.priority === "urgent" ? "bg-red-50 text-red-700" :
+                      task.priority === "high" ? "bg-orange-50 text-orange-700" :
+                      task.priority === "low" ? "bg-slate-100 text-slate-600" :
+                      "bg-blue-50 text-blue-700"
+                    }`}>
+                      {task.priority || "normal"}
+                    </span>
+                    <span className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${completed ? "bg-emerald-50 text-emerald-700" : overdue ? "bg-red-50 text-red-700" : "bg-amber-50 text-amber-700"}`}>
+                      {completed ? "Completed" : overdue ? "Overdue" : task.status || "Pending"}
+                    </span>
+                    <button type="button" onClick={() => toggleComplete(task)} disabled={updatingId === task.id} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      {completed ? "Reopen" : "Complete"}
                     </button>
-                  )}
-
-                </div>
-              </div>
-            ))}
-
+                    <button type="button" onClick={() => beginEdit(task)} disabled={updatingId === task.id} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => deleteTask(task)} disabled={updatingId === task.id} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }

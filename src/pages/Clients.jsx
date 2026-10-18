@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 
 import readXlsxFile from "read-excel-file/browser"
 
@@ -13,12 +13,11 @@ import { Link } from "react-router-dom"
 export default function Clients() {
 
   const [clients, setClients] = useState([])
-
+  const [teamMembers, setTeamMembers] = useState([])
   const [name, setName] = useState("")
-
   const [email, setEmail] = useState("")
-
   const [company, setCompany] = useState("")
+  const [assignedTo, setAssignedTo] = useState("")
 
 
 
@@ -27,8 +26,9 @@ export default function Clients() {
   const [importing, setImporting] = useState(false)
 
   const [search, setSearch] = useState("")
-
   const [stageFilter, setStageFilter] = useState("all")
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
 
 
 
@@ -40,37 +40,44 @@ export default function Clients() {
 
 
 
-  const fetchClients = async () => {
+  const loadClientRecords = useCallback(() => Promise.all([
+      supabase
+        .from("clients")
+        .select("*")
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("team_members")
+        .select("id, name, status")
+        .order("name", { ascending: true }),
+    ]), [])
 
-    const { data, error } = await supabase
-
-      .from("clients")
-
-      .select("*")
-
-      .order("created_at", { ascending: false })
-
-
-
-    if (!error) {
-
-      setClients(data || [])
-
+  const applyClientRecords = useCallback(([clientsResult, membersResult]) => {
+    if (clientsResult.error) {
+      console.error("Client fetch error:", clientsResult.error)
     } else {
-
-      console.error(error)
-
+      setClients(clientsResult.data || [])
     }
 
-  }
+    if (membersResult.error) {
+      console.error("Team member fetch error:", membersResult.error)
+    } else {
+      setTeamMembers(membersResult.data || [])
+    }
+  }, [])
+
+  const fetchClients = async () => applyClientRecords(await loadClientRecords())
 
 
 
   useEffect(() => {
-
-    fetchClients()
-
-  }, [])
+    let active = true
+    loadClientRecords()
+      .then((records) => {
+        if (active) applyClientRecords(records)
+      })
+      .catch((error) => console.error("Client records fetch error:", error))
+    return () => { active = false }
+  }, [applyClientRecords, loadClientRecords])
 
 
 
@@ -100,15 +107,9 @@ export default function Clients() {
 
     try {
 
-      // Auto assign
-
-      const team = ["member1", "member2", "member3"]
-
-
-
-      const randomMember =
-
-        team[Math.floor(Math.random() * team.length)]
+      const assignedMember = teamMembers.find(
+        (member) => String(member.id) === assignedTo
+      )
 
 
 
@@ -128,7 +129,7 @@ export default function Clients() {
 
             company: company.trim(),
 
-            assigned_to: randomMember,
+            assigned_to: assignedMember?.id || null,
 
             stage: "discovery",
 
@@ -198,7 +199,9 @@ export default function Clients() {
 
             type: "created",
 
-            description: `Client created and assigned to ${randomMember}`,
+            description: assignedMember
+              ? `Client created and assigned to ${assignedMember.name}`
+              : "Client created without an assignee",
 
           },
 
@@ -239,14 +242,14 @@ export default function Clients() {
       // Reset
 
       setName("")
-
       setEmail("")
-
       setCompany("")
+      setAssignedTo("")
 
 
 
       await fetchClients()
+      setPage(1)
 
 
 
@@ -416,12 +419,6 @@ export default function Clients() {
 
 
 
-        const team = ["member1", "member2", "member3"]
-
-        const assignedTo = team[Math.floor(Math.random() * team.length)]
-
-
-
         try {
 
           const { data: newClient, error } = await supabase
@@ -436,7 +433,7 @@ export default function Clients() {
 
               company: row.company,
 
-              assigned_to: assignedTo,
+              assigned_to: assignedTo || null,
 
               stage: "discovery",
 
@@ -488,7 +485,11 @@ export default function Clients() {
 
               type: "created",
 
-              description: `Client imported and assigned to ${assignedTo}`,
+              description: assignedTo
+                ? `Client imported and assigned to ${
+                    teamMembers.find((member) => String(member.id) === assignedTo)?.name || "a team member"
+                  }`
+                : "Client imported without an assignee",
 
             })
 
@@ -541,7 +542,7 @@ export default function Clients() {
 
 
       await fetchClients()
-
+      setPage(1)
       const summary = [
 
         `Clients added: ${added}`,
@@ -605,6 +606,7 @@ export default function Clients() {
       setClients((currentClients) =>
         currentClients.filter((item) => item.id !== client.id)
       )
+      setPage(1)
       alert("Client deleted successfully.")
     } catch (error) {
       console.error("Delete client error:", error)
@@ -699,12 +701,17 @@ export default function Clients() {
 
   })
 
-
-
   // =========================
 
-  // Show at most 10 matching clients; there are no pagination controls.
-  const visibleClients = filteredClients.slice(0, 10)
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize))
+  const currentPage = Math.min(page, totalPages)
+  const visibleClients = filteredClients.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  )
+  const getMemberName = (memberId) =>
+    teamMembers.find((member) => String(member.id) === String(memberId))?.name ||
+    "Unassigned"
 
     // STATS
 
@@ -978,7 +985,7 @@ export default function Clients() {
 
 
 
-        <div className="grid grid-cols-1 items-end gap-3 min-[769px]:grid-cols-2 min-[1101px]:grid-cols-[1fr_1fr_1fr_150px]">
+        <div className="grid grid-cols-1 items-end gap-3 min-[769px]:grid-cols-2 min-[1101px]:grid-cols-[1fr_1fr_1fr_1fr_150px]">
 
           {/* NAME */}
 
@@ -1081,6 +1088,25 @@ export default function Clients() {
           </div>
 
 
+
+          {/* ASSIGNEE */}
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">
+              Assign to
+            </label>
+            <select
+              value={assignedTo}
+              onChange={(event) => setAssignedTo(event.target.value)}
+              className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700"
+            >
+              <option value="">Unassigned</option>
+              {teamMembers.filter((member) => member.status === "active").map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </div>
 
           {/* BUTTON */}
 
@@ -1212,7 +1238,10 @@ export default function Clients() {
 
                 value={search}
 
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value)
+                  setPage(1)
+                }}
 
                 className="w-full border-none bg-transparent text-[13px] text-gray-700 outline-none placeholder:text-gray-400"
 
@@ -1228,7 +1257,10 @@ export default function Clients() {
 
               value={stageFilter}
 
-              onChange={(e) => setStageFilter(e.target.value)}
+              onChange={(e) => {
+                setStageFilter(e.target.value)
+                setPage(1)
+              }}
 
               className={`cursor-pointer px-2.5 outline-none max-[480px]:w-full ${toolbarControl}`}
 
@@ -1438,7 +1470,7 @@ export default function Clients() {
 
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
 
-                            {getMemberInitial(client.assigned_to)}
+                            {getMemberInitial(getMemberName(client.assigned_to))}
 
                           </div>
 
@@ -1448,7 +1480,7 @@ export default function Clients() {
 
                             <strong className="text-[13px] font-semibold text-gray-700">
 
-                              {client.assigned_to || "Unassigned"}
+                              {getMemberName(client.assigned_to)}
 
                             </strong>
 
@@ -1555,6 +1587,49 @@ export default function Clients() {
           </table>
 
         </div>
+
+        {filteredClients.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4">
+            <label className="flex items-center gap-2 text-xs text-gray-500">
+              Rows per page
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number(event.target.value))
+                  setPage(1)
+                }}
+                className="h-8 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700"
+              >
+                {[10, 25, 50].map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span>
+                {(currentPage - 1) * pageSize + 1}–
+                {Math.min(currentPage * pageSize, filteredClients.length)} of {filteredClients.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={currentPage === 1}
+                className="rounded-md border border-gray-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span>Page {currentPage} of {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={currentPage === totalPages}
+                className="rounded-md border border-gray-200 px-3 py-1.5 font-medium disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
       </div>
 
