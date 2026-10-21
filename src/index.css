@@ -1,6 +1,86 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 @import "tailwindcss";
 
+/* Login page: dedicated styles keep the compact split-card layout reliable. */
+.login-shell {
+  min-height: 100vh; display: grid; place-items: center; padding: 36px 22px;
+  background: radial-gradient(ellipse at 50% 0%, #f8f6fc 0, #f0eef5 42%, #e9eaf0 100%);
+  color: #241d35; font-family: var(--font, Inter, Arial, sans-serif);
+}
+.login-card {
+  display: grid; grid-template-columns: 43% 57%; width: min(960px, 100%); min-height: 570px;
+  overflow: hidden; border: 1px solid rgba(255,255,255,.85); border-radius: 25px; background: #fbfbfd;
+  box-shadow: 0 35px 90px rgba(37, 20, 74, .17), 0 4px 14px rgba(37, 20, 74, .05);
+}
+.login-brand {
+  position: relative; display: flex; flex-direction: column; justify-content: space-between;
+  min-width: 0; overflow: hidden; padding: 34px 34px 24px; color: white;
+  background: radial-gradient(ellipse at 18% 10%, #5321a0 0, transparent 40%), radial-gradient(ellipse at 95% 78%, #401582 0, transparent 38%), #200550;
+}
+.login-brand::after { position: absolute; inset: 0; background-image: radial-gradient(#fff 0.7px, transparent .7px); background-size: 9px 9px; content: ""; opacity: .15; mask-image: linear-gradient(135deg, #000 0, transparent 30%); }
+.login-brand-head { position: relative; z-index: 2; display: flex; align-items: center; gap: 11px; }
+.login-brand-head > div:first-child, .login-mobile-brand > div:first-child {
+  width: 38px; height: 38px; border-radius: 11px; display: grid; place-items: center;
+  border: 1px solid rgba(255,255,255,.22); background: linear-gradient(145deg, rgba(255,255,255,.2), rgba(255,255,255,.07)); color: white; font-size: 18px; font-weight: 700;
+  box-shadow: inset 0 1px rgba(255,255,255,.2), 0 5px 14px rgba(9,2,34,.18);
+}
+.login-brand-head > div:first-child span { color: #d6a8ff; }
+.login-brand-head > div:last-child > div:first-child { font-size: 14px; font-weight: 700; }
+.login-brand-head > div:last-child > div:last-child { margin-top: 2px; color: #c5b4e3; font-size: 10px; }
+.login-brand-copy { position: relative; z-index: 2; margin: auto 0; padding: 44px 0 60px; }
+.login-brand-copy > div:first-child { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 18px; padding: 7px 11px; border: 1px solid #ffffff30; border-radius: 30px; background: #ffffff12; color: #e8ddf8; font-size: 10px; letter-spacing: .015em; box-shadow: inset 0 1px #ffffff0a; }
+.login-brand-copy > div:first-child span { width: 6px; height: 6px; border-radius: 50%; background: #73e1ae; }
+.login-brand-title { max-width: 360px; font-size: clamp(30px, 3vw, 40px); font-weight: 650; line-height: 1.1; letter-spacing: -.05em; text-wrap: balance; }
+.login-brand-title span { color: #c5a4ff; }
+.login-brand-description { max-width: 300px; margin-top: 16px; color: #d3c7e7; font-size: 12px; line-height: 1.75; }
+.login-features { display: grid; gap: 9px; margin-top: 20px; }
+.login-features > div { display: flex; align-items: center; gap: 8px; color: #e0d6ef; font-size: 10px; }
+.login-features > div > span { width: 18px; height: 18px; border-radius: 50%; background: #ffffff18; display: grid; place-items: center; }
+.login-brand-foot { position: relative; z-index: 2; color: #ae9acb; font-size: 9px; }
+.login-illustration { position: absolute; right: -8px; bottom: 37px; width: 175px; height: 195px; opacity: .86; }
+.login-sun { position: absolute; top: 3px; right: 25px; width: 94px; height: 94px; border: 1px solid #ffffff24; border-radius: 50%; box-shadow: 0 0 0 14px #ffffff08, 0 0 0 29px #ffffff06; }
+.login-person-head { position: absolute; z-index: 2; top: 62px; right: 53px; width: 29px; height: 33px; border-radius: 45% 45% 48% 48%; background: #f0b9a4; box-shadow: inset -5px -2px #d9958f; }
+.login-person-body { position: absolute; z-index: 2; top: 91px; right: 31px; width: 62px; height: 72px; border-radius: 28px 28px 7px 7px; background: linear-gradient(130deg, #fff5d9, #d9c9fa); transform: rotate(-7deg); }
+.login-desk { position: absolute; z-index: 3; right: 3px; bottom: 16px; width: 160px; height: 8px; border-radius: 8px; background: linear-gradient(90deg, #e9b594, #f3cba7); box-shadow: 0 10px 0 -2px #6b4c94; }
+.login-laptop { position: absolute; z-index: 4; right: 102px; bottom: 26px; width: 39px; height: 29px; border: 2px solid #d8c9f1; border-bottom-width: 5px; border-radius: 4px; background: linear-gradient(140deg, #aa98d2, #66528e); box-shadow: 4px 3px 10px #13063555; }
+.login-plant { position: absolute; right: 0; bottom: 23px; width: 18px; height: 39px; border-left: 2px solid #9bd9b3; transform: rotate(16deg); }
+.login-form-panel { display: flex; align-items: center; justify-content: center; min-width: 0; padding: 52px 56px; background: linear-gradient(145deg, #fff 0%, #faf9fc 100%); }
+.login-form-content { width: 100%; max-width: 310px; }
+.login-mobile-brand { display: none; }
+.login-form-heading { margin-bottom: 32px; }
+.login-eyebrow { margin-bottom: 9px; color: #6a32ad; font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.login-form-heading h2 { color: #201934; font-size: 28px; font-weight: 700; letter-spacing: -.045em; line-height: 1.2; }
+.login-form-heading p { margin-top: 7px; color: #777487; font-size: 11px; }
+.login-form { display: grid; gap: 18px; }
+.login-form label { display: block; margin-bottom: 6px; color: #484356; font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; }
+.login-input { display: block; width: 100%; height: 42px; padding: 0 13px; border: 1px solid #e1dfea; border-radius: 10px; outline: none; background: #fff; color: #29243a; font: inherit; font-size: 11px; box-shadow: 0 3px 8px #2410520b, inset 0 1px #fff; transition: border-color .16s, box-shadow .16s; }
+.login-input::placeholder { color: #a5a2b1; }
+.login-input:focus { border-color: #8b52d5; box-shadow: 0 0 0 3px #7c3ac21a; }
+.login-password-label { display: flex; align-items: center; justify-content: space-between; }
+.login-password-label label { margin-bottom: 6px; }
+.login-forgot { margin-bottom: 6px; border: 0; padding: 0; background: none; color: #6330a7; font-size: 9px; cursor: pointer; }
+.login-password-wrap { position: relative; }
+.login-password-input { padding-right: 52px; }
+.login-show-password { position: absolute; top: 0; right: 7px; height: 42px; border: 0; padding: 0 5px; background: none; color: #766d87; font-size: 9px; cursor: pointer; }
+.login-submit { display: flex; width: 100%; height: 42px; align-items: center; justify-content: center; gap: 8px; margin-top: 5px; border: 0; border-radius: 10px; background: linear-gradient(110deg, #321073, #5420a0); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .01em; box-shadow: 0 7px 16px #35116e30, inset 0 1px #ffffff25; cursor: pointer; transition: transform .16s, box-shadow .16s, filter .16s; }
+.login-submit:hover { transform: translateY(-1px); box-shadow: 0 9px 18px #35116e38; }
+.login-submit:disabled { cursor: wait; opacity: .65; }
+.login-error { padding: 10px 12px; border: 1px solid #fecaca; border-radius: 9px; background: #fff1f2; color: #be123c; font-size: 11px; line-height: 1.5; }
+.login-privacy { margin-top: 21px; color: #9894a3; text-align: center; font-size: 9px; line-height: 1.6; }
+@media (max-width: 680px) {
+  .login-shell { padding: 18px 14px; }
+  .login-card { grid-template-columns: 1fr; width: min(420px, 100%); min-height: 0; border-radius: 19px; }
+  .login-brand { min-height: 175px; padding: 19px 22px; }
+  .login-brand-copy { margin: 20px 0 0; padding: 0 0 15px; }
+  .login-brand-title { max-width: 290px; font-size: 25px; }
+  .login-brand-description, .login-features, .login-brand-foot, .login-illustration { display: none; }
+  .login-brand-copy > div:first-child { margin-bottom: 9px; }
+  .login-form-panel { padding: 28px 24px 26px; }
+  .login-form-content { max-width: none; }
+  .login-mobile-brand { display: none; }
+  .login-form-heading { margin-bottom: 22px; }
+}
+
 /* =========================================================
    GLOBAL DESIGN TOKENS  (change here -> changes every page)
    Text scale used across the whole app:
@@ -30,8 +110,8 @@
   --text: #111827;
   --text-2: #4b5563;
   --text-3: #9ca3af;
-  --primary: #111827;
-  --accent: #2563eb;
+  --primary: #321073;
+  --accent: #6a32ad;
   --danger: #dc2626;
   --success: #059669;
   --warning: #d97706;
@@ -163,9 +243,9 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; min-height:
 }
 .badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .badge-discovery { background: #fff7ed; color: #c2410c; }
-.badge-signed { background: #eff6ff; color: #1d4ed8; }
+.badge-signed { background: #f3edfb; color: #5420a0; }
 .badge-active { background: #ecfdf5; color: #047857; }
-.badge-delivered { background: #f5f3ff; color: #6d28d9; }
+.badge-delivered { background: #f5f0fc; color: #6331a7; }
 .badge-pending { background: #fffbeb; color: #b45309; }
 .badge-completed { background: #ecfdf5; color: #047857; }
 .badge-overdue { background: #fef2f2; color: #b91c1c; }
@@ -204,4 +284,75 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; min-height:
   .card-head, .card-pad { padding: 16px; }
   .table th, .table td { padding: 12px 14px; }
 }
+}
+
+/* Clients workspace palette and type scale, aligned with the login screen. */
+.clients-page { color: #29233a; font-size: 13px; }
+.clients-page p, .clients-page label, .clients-page input, .clients-page select,
+.clients-page button, .clients-page th, .clients-page td { font-size: 12px; }
+.clients-page .clients-heading { margin-bottom: 22px; }
+.clients-page .clients-heading h1 { color: #211833; font-size: 26px; line-height: 1.2; letter-spacing: -.04em; }
+.clients-page .clients-heading p { margin-top: 7px; color: #777487; font-size: 13px; }
+.clients-page .clients-card { border-color: #e9e5f0; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px rgba(43, 25, 77, .045); }
+.clients-page .clients-stat { min-height: 92px; transition: transform .18s, box-shadow .18s; }
+.clients-page .clients-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(49, 16, 120, .09); }
+.clients-page .clients-stat > div:first-child { border: 1px solid #eee7f8; background: linear-gradient(145deg, #f5efff, #eee5fb); color: #5b279d; }
+.clients-page .clients-stat span { color: #777487; font-size: 12px; }
+.clients-page .clients-stat strong { color: #211833; font-size: 22px; line-height: 1; }
+.clients-page h2 { color: #29233a; font-size: 15px; letter-spacing: -.015em; }
+.clients-page h3 { font-size: 13px; }
+.clients-page label { color: #514a60; font-size: 11px; font-weight: 600; }
+.clients-page input, .clients-page select { color: #3f394d; }
+.clients-page input:focus, .clients-page select:focus { outline: none; border-color: #8b52d5; box-shadow: 0 0 0 3px rgba(124, 58, 194, .1); }
+.clients-page .clients-primary { background: linear-gradient(110deg, #321073, #5420a0); box-shadow: 0 4px 10px rgba(53, 17, 110, .16); }
+.clients-page .clients-primary:hover { background: linear-gradient(110deg, #42149b, #6331ad); }
+.clients-page .clients-table-card { border-radius: 16px; }
+.clients-page .clients-table-card > div:first-child { background: linear-gradient(180deg, #fff, #fdfcff); }
+.clients-page .clients-table-head { background: #f8f5fc; }
+.clients-page .clients-table-head th { color: #786a8d; font-size: 10px; font-weight: 700; letter-spacing: .09em; }
+.clients-page .clients-table-card tbody td { border-color: #f0edf4; color: #595365; font-size: 12px; }
+.clients-page .clients-table-card tbody tr { transition: background-color .15s; }
+.clients-page .clients-table-card tbody tr:hover { background: #fbf9fe; }
+.clients-page .clients-name-link strong { color: #282139; font-size: 12px; }
+.clients-page .clients-name-link span { color: #948ea0; font-size: 10px; }
+.clients-page .clients-avatar { background: linear-gradient(145deg, #f2eaff, #e9dcfb); color: #5a279b; }
+.clients-page .clients-table-card td a[href^="mailto:"] { color: #665d75; font-size: 12px; }
+.clients-page .clients-table-card td a[href^="mailto:"]:hover { color: #5420a0; }
+.clients-page .clients-table-card button:not(.clients-primary), .clients-page .clients-table-card select { border-color: #e7e2ed; border-radius: 8px; }
+.clients-page .clients-table-card button:not(.clients-primary):hover { border-color: #d6c4ed; background: #f8f4fd; }
+.clients-page .clients-table-card button[aria-label] { color: #5c279e; }
+@media (max-width: 768px) {
+  .clients-page .clients-heading h1 { font-size: 23px; }
+  .clients-page .clients-card { border-radius: 13px; }
+  .clients-page .clients-stat { min-height: 78px; }
+}
+
+/* Shared CRM visual system: consistent violet brand, surfaces, and icon controls. */
+.crm-app { --crm-violet: #4b1b87; --crm-violet-dark: #321073; --crm-violet-soft: #f3edfb; --crm-border: #e9e5ef; background: #f6f5f9; }
+.crm-app .crm-sidebar { border-color: #e9e5ef; background: linear-gradient(180deg, #fff 0%, #fcfbfe 100%); box-shadow: 5px 0 22px rgba(40, 20, 74, .035); }
+.crm-app .crm-logo-mark { background: linear-gradient(145deg, #55259a, #321073); box-shadow: 0 5px 12px rgba(50, 16, 115, .23); }
+.crm-app .crm-logo-mark span { color: #d5b5ff; }
+.crm-app .crm-nav-active { background: linear-gradient(110deg, #321073, #5420a0); color: #fff; box-shadow: 0 5px 12px rgba(53, 17, 110, .18); }
+.crm-app .crm-sidebar nav a:not(.crm-nav-active):hover { background: #f4effa; color: #4b1b87; }
+.crm-app header { border-color: #e9e5ef; background: rgba(255,255,255,.94); box-shadow: 0 3px 14px rgba(37, 20, 74, .035); backdrop-filter: blur(12px); }
+.crm-app header button:hover { color: #5420a0; }
+.crm-app header input:focus { outline: none; }
+.crm-app header a:hover { color: #5420a0; }
+.crm-app .crm-icon-button:hover { background: #f4effa; color: #5420a0; }
+.crm-app .bg-gray-900, .crm-app .bg-indigo-600, .crm-app .bg-blue-600 { background-color: #321073; }
+.crm-app .hover\:bg-gray-800:hover, .crm-app .hover\:bg-indigo-700:hover, .crm-app .hover\:bg-blue-700:hover { background-color: #42149b; }
+.crm-app .text-blue-600, .crm-app .text-indigo-600 { color: #5420a0; }
+.crm-app .text-blue-700, .crm-app .text-indigo-700 { color: #492082; }
+.crm-app .bg-blue-50, .crm-app .bg-indigo-50 { background-color: #f3edfb; }
+.crm-app .bg-blue-100, .crm-app .bg-indigo-100 { background-color: #eaddf7; }
+.crm-app .border-blue-100, .crm-app .border-indigo-100 { border-color: #e8dcf7; }
+.crm-app .hover\:text-blue-600:hover, .crm-app .hover\:text-indigo-600:hover { color: #42149b; }
+.crm-app .border-blue-500, .crm-app .border-indigo-500 { border-color: #8b52d5; }
+.crm-app .focus\:border-blue-500:focus { border-color: #8b52d5; }
+.crm-app .focus\:ring-blue-500\/10:focus { --tw-ring-color: rgba(124, 58, 194, .1); }
+.crm-app .rounded-xl.border, .crm-app .rounded-2xl.border { border-color: #e9e5ef; box-shadow: 0 4px 16px rgba(43, 25, 77, .045); }
+.crm-app .rounded-xl.border:hover, .crm-app .rounded-2xl.border:hover { box-shadow: 0 8px 22px rgba(43, 25, 77, .075); }
+.crm-app main input, .crm-app main select, .crm-app main textarea { accent-color: #5420a0; }
+@media (max-width: 768px) {
+  .crm-app header { box-shadow: 0 2px 10px rgba(37, 20, 74, .04); }
 }

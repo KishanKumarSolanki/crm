@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import Icon from "../components/Icon"
 
 const PanelHeader = ({ title, text, to, linkText }) => (
   <div className="mb-5 flex items-start justify-between gap-4">
@@ -188,17 +189,17 @@ export default function Dashboard() {
   const panel = "rounded-2xl border border-slate-200 bg-white p-[22px] shadow-sm max-[700px]:p-[17px]"
 
   const tones = {
-    blue: "bg-blue-50 text-blue-600",
-    green: "bg-emerald-50 text-emerald-600",
-    purple: "bg-violet-50 text-violet-600",
-    orange: "bg-orange-50 text-orange-600",
+    blue: "bg-violet-50 text-violet-700",
+    green: "bg-violet-50 text-violet-700",
+    purple: "bg-violet-50 text-violet-700",
+    orange: "bg-violet-50 text-violet-700",
   }
 
   const statCards = [
-    { label: "Total Clients", value: totalClients, icon: "◉", tone: "blue", note: "All clients", rest: "in CRM", noteClass: "text-emerald-600" },
-    { label: "Active Clients", value: activeClients, icon: "↗", tone: "green", note: "Active", rest: "projects", noteClass: "text-emerald-600" },
-    { label: "Delivered", value: deliveredClients, icon: "✓", tone: "purple", note: "Completed", rest: "projects", noteClass: "text-emerald-600" },
-    { label: "Pending Tasks", value: pendingTasks, icon: "!", tone: "orange", note: "Needs attention", rest: "", noteClass: "text-orange-600" },
+    { label: "Total Clients", value: totalClients, icon: "clients", tone: "blue", note: "All clients", rest: "in CRM", noteClass: "text-violet-700" },
+    { label: "Active Clients", value: activeClients, icon: "pipeline", tone: "green", note: "Active", rest: "projects", noteClass: "text-violet-700" },
+    { label: "Delivered", value: deliveredClients, icon: "tasks", tone: "purple", note: "Completed", rest: "projects", noteClass: "text-violet-700" },
+    { label: "Pending Tasks", value: pendingTasks, icon: "tasks", tone: "orange", note: "Needs attention", rest: "", noteClass: "text-violet-700" },
   ]
 
   const pipelineRows = [
@@ -209,10 +210,10 @@ export default function Dashboard() {
   ]
 
   const quickActions = [
-    { to: "/clients", tone: "blue", icon: "+", title: "Add Client", text: "Create a new client" },
-    { to: "/team-members", tone: "green", icon: "+", title: "Add Team Member", text: "Add someone to your team" },
-    { to: "/pipeline", tone: "purple", icon: "↗", title: "Open Pipeline", text: "Manage client stages" },
-    { to: "/tasks", tone: "orange", icon: "✓", title: "View Tasks", text: "Check pending work" },
+    { to: "/clients", tone: "blue", icon: "plus", title: "Add Client", text: "Create a new client" },
+    { to: "/team-members", tone: "green", icon: "team", title: "Add Team Member", text: "Add someone to your team" },
+    { to: "/pipeline", tone: "purple", icon: "pipeline", title: "Open Pipeline", text: "Manage client stages" },
+    { to: "/tasks", tone: "orange", icon: "tasks", title: "View Tasks", text: "Check pending work" },
   ]
 
   // =========================
@@ -271,7 +272,7 @@ export default function Dashboard() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-500">{card.label}</span>
               <div className={`flex h-9 w-9 items-center justify-center rounded-[9px] font-bold ${tones[card.tone]}`}>
-                {card.icon}
+                <Icon name={card.icon} size={18} />
               </div>
             </div>
 
@@ -406,7 +407,7 @@ export default function Dashboard() {
                 className="flex items-center gap-3 border-b border-slate-100 py-3.5 text-inherit no-underline transition last:border-b-0 hover:bg-slate-50"
               >
                 <div className={`flex h-9 w-9 items-center justify-center rounded-[9px] font-bold ${tones[action.tone]}`}>
-                  {action.icon}
+                  <Icon name={action.icon} size={17} />
                 </div>
 
                 <div className="flex flex-1 flex-col gap-0.5">

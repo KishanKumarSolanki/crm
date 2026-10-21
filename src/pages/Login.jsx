@@ -1,301 +1,186 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
+const features = [
+  "Keep every client organized in one place.",
+  "Assign follow-ups and stay aligned as a team.",
+  "Track every opportunity from first contact to close.",
+];
+
+function BrandMark({ light = false }) {
+  return (
+    <div className={`flex h-11 w-11 items-center justify-center rounded-[14px] text-lg font-bold shadow-sm ${light ? "bg-white text-slate-950" : "bg-slate-950 text-white"}`} aria-hidden="true">
+      C<span className="text-blue-500">.</span>
+    </div>
+  );
+}
+
 export default function Login() {
   const navigate = useNavigate();
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-
-    if (!email || !password) {
-      alert("Please enter email and password");
-      return;
-    }
-
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    setErrorMessage("");
     setLoading(true);
 
     try {
-      const { data, error } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
-        alert(error.message);
+        setErrorMessage(error.message);
         return;
       }
 
-      const { data: profile, error: profileError } =
-        await supabase
-          .from("profiles")
-          .select("id, full_name, email, role")
-          .eq("id", data.user.id)
-          .single();
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("id, full_name, email, role")
+        .eq("id", data.user.id)
+        .single();
 
       if (profileError || !profile) {
-        alert("User profile not found");
+        setErrorMessage("We couldn't find your user profile. Please contact your administrator.");
         await supabase.auth.signOut();
         return;
       }
 
-      console.log("Logged in user:", profile);
       navigate("/");
     } catch (error) {
-      alert(error.message || "Something went wrong");
+      setErrorMessage(error.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const features = [
-    {
-      title: "Client Management",
-      description: "Keep every client organized in one place.",
-    },
-    {
-      title: "Team Collaboration",
-      description: "Assign clients and follow-ups to your team.",
-    },
-    {
-      title: "Sales Pipeline",
-      description: "Track every opportunity from start to finish.",
-    },
-  ];
-
   return (
-    <div className="flex min-h-screen bg-[#f7f8fa] font-sans text-gray-900">
+    <main className="login-shell">
+      <div className="login-card">
+      <section className="login-brand" aria-label="About CRM">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_18%_14%,rgba(139,92,246,0.42),transparent_34%),radial-gradient(ellipse_at_88%_88%,rgba(84,43,170,0.48),transparent_43%)]" />
+        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full border border-white/10" />
+        <div className="pointer-events-none absolute -right-12 -top-16 h-56 w-56 rounded-full border border-white/[0.07]" />
+        <div className="pointer-events-none absolute bottom-0 left-0 h-1.5 w-2/3 rounded-r-full bg-violet-400/80" />
 
-      {/* LEFT BRAND SECTION */}
-      <aside className="relative hidden w-[48%] flex-col justify-between overflow-hidden bg-gray-900 px-10 py-12 text-white md:flex lg:px-16 lg:py-14">
-
-        <div className="pointer-events-none absolute -right-[170px] -top-[170px] h-[420px] w-[420px] rounded-full border border-white/[0.07]" />
-
-        <div className="pointer-events-none absolute -bottom-[350px] -left-[350px] h-[600px] w-[600px] rounded-full border border-white/[0.05]" />
-
-        <div className="relative z-10 max-w-[500px]">
-
-          <div className="mb-12 flex h-[46px] w-[46px] items-center justify-center rounded-xl bg-white text-xl font-extrabold text-gray-900 lg:mb-[60px]">
-            C
+        <div className="login-brand-head">
+          <BrandMark light />
+          <div>
+            <div className="text-[15px] font-semibold tracking-[-0.03em]">CRM</div>
+            <div className="mt-0.5 text-[11px] text-violet-200/75">Client relationships, made clear</div>
           </div>
+        </div>
 
-          <h1 className="text-[32px] font-bold leading-[1.08] tracking-[-1.7px] lg:text-[clamp(32px,3.4vw,50px)]">
-            Manage your business.
-            <br />
-            <span className="text-gray-400">
-              Grow your relationships.
-            </span>
+        <div className="login-brand-copy">
+          <div className="mb-4 inline-flex w-fit items-center gap-2 rounded-full border border-white/15 bg-white/[0.08] px-3 py-1.5 text-[11px] font-medium text-violet-100">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> Your business, in sync
+          </div>
+          <h1 className="login-brand-title">
+            Great work starts with <span>great relationships.</span>
           </h1>
-
-          <p className="mt-[22px] max-w-[430px] text-[13px] leading-[1.7] text-gray-400">
-            A smarter way to manage clients, tasks,
-            team members and your complete sales pipeline.
+          <p className="login-brand-description">
+            Keep clients, follow-ups, and your team moving forward together.
           </p>
 
-          <div className="mt-9 flex flex-col gap-5 lg:mt-12">
+          <div className="login-features">
             {features.map((feature) => (
-              <div key={feature.title} className="flex items-start gap-3">
-
-                <div className="flex h-[27px] w-[27px] shrink-0 items-center justify-center rounded-[7px] border border-white/[0.13] text-[10px] text-gray-300">
-                  ✓
-                </div>
-
-                <div>
-                  <strong className="block text-[11px] font-semibold text-gray-50">
-                    {feature.title}
-                  </strong>
-
-                  <span className="mt-1 block text-[9px] leading-relaxed text-gray-500">
-                    {feature.description}
-                  </span>
-                </div>
-
+              <div key={feature}>
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] text-violet-200" aria-hidden="true">&#10003;</span>
+                {feature}
               </div>
             ))}
           </div>
+          <div className="login-illustration" aria-hidden="true"><span className="login-sun" /><span className="login-person-head" /><span className="login-person-body" /><span className="login-desk" /><span className="login-laptop" /><span className="login-plant" /></div>
         </div>
 
-        <div className="relative z-10 text-[9px] text-gray-600">
-          © {new Date().getFullYear()} CRM Management System
-        </div>
-      </aside>
+        <div className="login-brand-foot">&copy; {new Date().getFullYear()} CRM Management System</div>
+      </section>
 
-      {/* RIGHT LOGIN SECTION */}
-      <main className="flex min-h-screen flex-1 items-center justify-center px-5 py-[30px] sm:px-10 md:px-8 lg:px-10">
+      <section className="login-form-panel" aria-label="Sign in">
+        <div className="login-form-content">
+          <div className="login-mobile-brand">
+            <BrandMark />
+            <div>
+              <div className="text-sm font-semibold">CRM</div>
+              <div className="text-xs text-slate-500">Client relationships, made clear</div>
+            </div>
+          </div>
 
-        <div className="w-full max-w-[390px]">
+          <div className="login-form-heading">
+            <div className="login-eyebrow">Welcome back</div>
+            <h2>Sign in to your CRM</h2>
+            <p>Good to see you. Let's get you back to work.</p>
+          </div>
 
-          {/* MOBILE LOGO */}
-          <div className="mb-10 flex items-center gap-3 md:hidden">
-
-            <div className="flex h-[35px] w-[35px] items-center justify-center rounded-lg bg-gray-900 text-[15px] font-bold text-white">
-              C
+          <form onSubmit={handleLogin} className="login-form">
+            <div>
+              <label htmlFor="email">Email address</label>
+              <input
+                id="email"
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(event) => { setEmail(event.target.value); setErrorMessage(""); }}
+                autoComplete="email"
+                required
+                className="login-input"
+              />
             </div>
 
             <div>
-              <strong className="block text-[13px] text-gray-900">
-                CRM
-              </strong>
-
-              <span className="mt-0.5 block text-[9px] text-gray-400">
-                Management System
-              </span>
-            </div>
-          </div>
-
-          {/* HEADER */}
-          <div className="mb-[29px]">
-
-            <div className="mb-[17px] flex h-[37px] w-[37px] items-center justify-center rounded-[9px] bg-gray-900 text-lg text-white">
-              →
-            </div>
-
-            <h2 className="text-[27px] font-bold tracking-[-0.7px] text-gray-900">
-              Welcome back
-            </h2>
-
-            <p className="mt-[7px] text-[11px] leading-relaxed text-gray-400">
-              Sign in to continue to your CRM dashboard.
-            </p>
-          </div>
-
-          {/* LOGIN FORM */}
-          <form onSubmit={handleLogin}>
-
-            {/* EMAIL */}
-            <div className="mb-[18px]">
-
-              <label
-                htmlFor="email"
-                className="mb-[7px] block text-[10px] font-semibold text-gray-700"
-              >
-                Email Address
-              </label>
-
-              <div className="flex h-[45px] items-center rounded-lg border border-[#e1e4e8] bg-white transition focus-within:border-gray-400 focus-within:ring-[3px] focus-within:ring-gray-900/[0.05]">
-
-                <span className="flex w-[38px] shrink-0 items-center justify-center text-sm text-zinc-400">
-                  @
-                </span>
-
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  className="h-full min-w-0 flex-1 bg-transparent pr-2 text-[11px] text-gray-900 outline-none placeholder:text-[#b1b5bc]"
-                />
-              </div>
-            </div>
-
-            {/* PASSWORD */}
-            <div className="mb-[18px]">
-
-              <div className="flex items-center justify-between">
-
-                <label
-                  htmlFor="password"
-                  className="mb-[7px] block text-[10px] font-semibold text-gray-700"
-                >
-                  Password
-                </label>
-
+              <div className="login-password-label">
+                <label htmlFor="password">Password</label>
                 <button
                   type="button"
-                  onClick={() =>
-                    alert(
-                      "Please contact your administrator to reset your password."
-                    )
-                  }
-                  className="mb-[7px] text-[9px] font-medium text-gray-500 hover:text-gray-900 hover:underline"
+                  onClick={() => setErrorMessage("Please contact your administrator to reset your password.")}
+                  className="login-forgot"
                 >
                   Forgot password?
                 </button>
               </div>
-
-              <div className="flex h-[45px] items-center rounded-lg border border-[#e1e4e8] bg-white transition focus-within:border-gray-400 focus-within:ring-[3px] focus-within:ring-gray-900/[0.05]">
-
-                <span className="flex w-[38px] shrink-0 items-center justify-center text-sm text-zinc-400">
-                  •
-                </span>
-
+              <div className="login-password-wrap">
                 <input
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(event) => { setPassword(event.target.value); setErrorMessage(""); }}
                   autoComplete="current-password"
                   required
-                  className="h-full min-w-0 flex-1 bg-transparent pr-1 text-[11px] text-gray-900 outline-none placeholder:text-[#b1b5bc]"
+                  className="login-input login-password-input"
                 />
-
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="mr-2 rounded px-1.5 py-1 text-[8px] font-semibold text-gray-400 hover:text-gray-700"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="login-show-password"
                 >
                   {showPassword ? "Hide" : "Show"}
                 </button>
               </div>
             </div>
 
-            {/* LOGIN BUTTON */}
+            {errorMessage && (
+              <div role="alert" className="login-error">
+                {errorMessage}
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
-              className="mt-[25px] flex h-[45px] w-full items-center justify-center gap-2.5 rounded-lg bg-gray-900 text-[11px] font-semibold text-white transition hover:-translate-y-px hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-65"
+              className="login-submit"
             >
-              {loading ? (
-                <>
-                  <span className="h-[13px] w-[13px] animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  Sign in
-                  <span className="text-[15px]">→</span>
-                </>
-              )}
+              {loading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Signing in...</> : <>Sign in <span aria-hidden="true">&#8594;</span></>}
             </button>
-
           </form>
 
-          {/* SECURITY INFO */}
-          <div className="mt-[22px] flex items-start gap-[9px] rounded-lg border border-[#eef0f2] bg-[#fafafa] p-3">
-
-            <div className="flex h-[23px] w-[23px] shrink-0 items-center justify-center rounded-md bg-emerald-50 text-[9px] font-bold text-emerald-600">
-              ✓
-            </div>
-
-            <div>
-              <strong className="block text-[9px] font-semibold text-gray-600">
-                Secure access
-              </strong>
-
-              <span className="mt-[3px] block text-[8px] leading-relaxed text-zinc-400">
-                Your account is protected by Supabase authentication.
-              </span>
-            </div>
-          </div>
-
-          {/* FOOTER */}
-          <div className="mt-7 text-center text-[8px] text-[#c0c4ca]">
-            CRM Management System
-          </div>
-
+          <p className="login-privacy">Secure sign-in &middot; Your client and team information stays private</p>
         </div>
-      </main>
-    </div>
+      </section>
+      </div>
+    </main>
   );
 }

@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase"
 import { sendClientWelcomeEmail } from "../lib/email"
 
 import { Link } from "react-router-dom"
+import Icon from "../components/Icon"
 
 
 
@@ -821,7 +822,7 @@ export default function Clients() {
 
 
 
-  const card = "rounded-xl border border-gray-200 bg-white shadow-sm"
+  const card = "clients-card rounded-2xl border border-gray-200 bg-white shadow-sm"
 
 
 
@@ -859,13 +860,13 @@ export default function Clients() {
 
   return (
 
-    <div className="w-full text-gray-900">
+    <div className="clients-page w-full text-gray-900">
 
 
 
       {/* HEADER */}
 
-      <div className="mb-[22px] flex items-end justify-between max-[768px]:items-start">
+      <div className="clients-heading mb-[22px] flex items-end justify-between max-[768px]:items-start">
 
         <div>
 
@@ -917,11 +918,11 @@ export default function Clients() {
 
         {statCards.map((item) => (
 
-          <div key={item.label} className={`${card} flex min-h-[88px] items-center gap-3.5 p-4`}>
+          <div key={item.label} className={`${card} clients-stat flex min-h-[88px] items-center gap-3.5 p-4`}>
 
             <div className={`flex h-11 w-11 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
 
-              <span>{item.icon}</span>
+              <Icon name={item.icon === "!" ? "tasks" : item.icon === "+" ? "plus" : item.icon === "◉" ? "clients" : item.icon === "↗" ? "pipeline" : "tasks"} size={18} />
 
             </div>
 
@@ -951,7 +952,7 @@ export default function Clients() {
 
           <div className="flex items-center gap-3">
 
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gray-900 text-xl text-white">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#321073] text-xl text-white shadow-sm">
 
               +
 
@@ -975,7 +976,7 @@ export default function Clients() {
 
 
 
-          <span className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-600">
+          <span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700">
 
             ● Automation Active
 
@@ -1118,7 +1119,7 @@ export default function Clients() {
 
               disabled={loading || importing}
 
-              className="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-gray-900 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+              className="clients-primary flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#321073] text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#42149b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
 
             >
 
@@ -1170,7 +1171,7 @@ export default function Clients() {
 
       {/* CLIENT LIST */}
 
-      <div className={`${card} overflow-hidden`}>
+      <div className={`${card} clients-table-card overflow-hidden`}>
 
         <div className="flex min-h-[72px] items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 max-[480px]:flex-col max-[480px]:items-start">
 
@@ -1290,7 +1291,7 @@ export default function Clients() {
 
           <table className="w-full min-w-[950px] border-collapse">
 
-            <thead className="bg-gray-50">
+            <thead className="clients-table-head bg-gray-50">
 
               <tr>
 
@@ -1388,11 +1389,11 @@ export default function Clients() {
 
                           to={`/client/${client.id}`}
 
-                          className="flex items-center gap-2.5 text-inherit no-underline"
+                          className="clients-name-link flex items-center gap-2.5 text-inherit no-underline"
 
                         >
 
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-[13px] font-bold text-indigo-600">
+                          <div className="clients-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-[13px] font-bold text-violet-700">
 
                             {client.name?.charAt(0)?.toUpperCase() || "C"}
 
@@ -1528,7 +1529,7 @@ export default function Clients() {
 
                             to={`/client/${client.id}`}
 
-                            className="inline-flex h-8 items-center justify-center rounded-md bg-gray-900 px-3 text-xs font-semibold text-white no-underline hover:bg-gray-800"
+                            className="clients-primary inline-flex h-8 items-center justify-center rounded-lg bg-[#321073] px-3 text-xs font-semibold text-white no-underline hover:bg-[#42149b]"
 
                           >
 

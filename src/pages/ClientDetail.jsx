@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import Icon from "../components/Icon"
 
 const stages = ["discovery", "signed", "active", "delivered"]
 
@@ -355,7 +356,7 @@ export default function ClientDetail() {
         {statCards.map((item) => (
           <div key={item.label} className={`${card} flex min-h-[88px] items-center gap-3.5 p-4`}>
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
-              <span>{item.icon}</span>
+              <Icon name={item.label === "Pending Tasks" ? "tasks" : item.label === "Notes" ? "clients" : item.label === "Activities" ? "pipeline" : "team"} size={18} />
             </div>
 
             <div className="min-w-0">

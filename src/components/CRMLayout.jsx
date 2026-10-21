@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Sidebar from "./Sidebar";
+import Icon from "./Icon";
 
 function CRMLayout() {
   const location = useLocation();
@@ -161,7 +162,7 @@ function CRMLayout() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f7f8fa]">
+    <div className="crm-app min-h-screen bg-[#f7f8fa]">
       <Sidebar
         mobileOpen={mobileMenu}
         onNavigate={() => setMobileMenu(false)}
@@ -178,7 +179,7 @@ function CRMLayout() {
               onClick={() => setMobileMenu((open) => !open)}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 min-[769px]:hidden"
             >
-              {mobileMenu ? "×" : "☰"}
+              <Icon name={mobileMenu ? "close" : "menu"} size={19} />
             </button>
             <div>
               <h1 className="text-[18px] font-bold leading-tight text-gray-900 min-[769px]:text-[22px]">{getPageTitle()}</h1>
@@ -189,7 +190,7 @@ function CRMLayout() {
           <div className="flex items-center gap-2 min-[769px]:gap-3">
             <div ref={searchRef} className="relative">
               <div className="hidden h-[38px] w-[200px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 min-[650px]:flex min-[1001px]:w-[240px]">
-                <span className="text-lg text-gray-400">⌕</span>
+                <Icon name="search" size={17} className="text-gray-400" />
                 <input
                   type="search"
                   aria-label="Search clients and tasks"
@@ -206,7 +207,7 @@ function CRMLayout() {
                 onClick={() => { setSearchOpen((open) => !open); setNotificationsOpen(false); }}
                 className="flex h-[36px] w-[36px] items-center justify-center rounded-lg border border-gray-200 bg-white text-lg text-gray-500 hover:bg-gray-50 min-[650px]:hidden"
               >
-                ⌕
+                <Icon name="search" size={18} />
               </button>
               {searchOpen && (
                 <div className="absolute right-0 top-11 z-[1100] max-h-[70vh] w-[min(360px,90vw)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
@@ -264,7 +265,7 @@ function CRMLayout() {
                 onClick={toggleNotifications}
                 className="relative h-[36px] w-[36px] rounded-lg border border-gray-200 bg-white text-lg text-gray-500 transition hover:bg-gray-50 min-[481px]:h-[38px] min-[481px]:w-[38px]"
               >
-                ♧
+                <Icon name="bell" size={18} />
                 {notifications.length > 0 && <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{notifications.length}</span>}
               </button>
               {notificationsOpen && (
@@ -297,7 +298,7 @@ function CRMLayout() {
                 <strong className="text-[13px] font-semibold text-gray-900">{userName}</strong>
                 <span className="mt-0.5 truncate text-xs text-gray-400">{profile?.email || "Loading profile..."}</span>
               </div>
-              <button type="button" onClick={handleLogout} title="Logout" aria-label="Logout" className="hidden h-8 w-8 rounded-[7px] text-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 min-[481px]:block">↪</button>
+              <button type="button" onClick={handleLogout} title="Logout" aria-label="Logout" className="crm-icon-button hidden h-8 w-8 items-center justify-center rounded-[7px] text-lg text-gray-400 transition hover:bg-red-50 hover:text-red-600 min-[481px]:flex"><Icon name="logout" size={17} /></button>
             </div>
           </div>
         </header>
