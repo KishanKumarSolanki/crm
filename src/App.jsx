@@ -8,9 +8,11 @@ import Pipeline from "./pages/Pipeline"
 import Tasks from "./pages/Tasks"
 import TeamMembers from "./pages/TeamMembers"
 import TeamMemberDetail from "./pages/TeamMemberDetail"
+import TeamMemberDashboard from "./pages/TeamMemberDashboard"
 
 import ProtectedRoute from "./components/ProtectedRoute"
 import AdminRoute from "./components/AdminRoute"
+import TeamMemberRoute from "./components/TeamMemberRoute"
 import CRMLayout from "./components/CRMLayout"
 
 function App() {
@@ -44,14 +46,16 @@ function App() {
           {/* DASHBOARD */}
           <Route
             path="/"
-            element={<Dashboard />}
+            element={<AdminRoute><Dashboard /></AdminRoute>}
           />
+
+          <Route path="/my-dashboard" element={<TeamMemberRoute><TeamMemberDashboard /></TeamMemberRoute>} />
 
 
           {/* CLIENTS */}
           <Route
             path="/clients"
-            element={<Clients />}
+            element={<AdminRoute><Clients /></AdminRoute>}
           />
 
 
@@ -65,14 +69,14 @@ function App() {
           {/* PIPELINE */}
           <Route
             path="/pipeline"
-            element={<Pipeline />}
+            element={<AdminRoute><Pipeline /></AdminRoute>}
           />
 
 
           {/* TASKS */}
           <Route
             path="/tasks"
-            element={<Tasks />}
+            element={<AdminRoute><Tasks /></AdminRoute>}
           />
 
 

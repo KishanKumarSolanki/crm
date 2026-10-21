@@ -139,6 +139,7 @@ function CRMLayout() {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path === "/") return "Dashboard";
+    if (path === "/my-dashboard") return "My Dashboard";
     if (path === "/clients") return "Clients";
     if (path === "/pipeline") return "Pipeline";
     if (path === "/tasks") return "Tasks";

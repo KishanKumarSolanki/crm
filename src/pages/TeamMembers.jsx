@@ -38,8 +38,8 @@ export default function TeamMembers() {
   const handleAddMember = async (e) => {
     e.preventDefault();
 
-    if (!name.trim()) {
-      alert("Please enter member name");
+    if (!name.trim() || !email.trim()) {
+      alert("Please enter the team member name and login email");
       return;
     }
 
@@ -143,6 +143,10 @@ export default function TeamMembers() {
         </button>
       </div>
 
+      <div className="mb-6 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950">
+        <strong>Login setup:</strong> Add a unique email here, then create/invite that same email under Supabase Authentication → Users. Set its profile role to <code className="rounded bg-white px-1.5 py-0.5">staff</code>. Matching emails link automatically after the migration is applied.
+      </div>
+
       {/* Summary */}
       <div className="mb-7 grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -217,7 +221,7 @@ export default function TeamMembers() {
               Add Team Member
             </h2>
             <p className="mt-1 text-sm text-slate-500">
-              Enter the details of your new team member.
+              Use the same email address you will create in Supabase Auth.
             </p>
           </div>
 
@@ -247,6 +251,7 @@ export default function TeamMembers() {
                 placeholder="Enter email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                required
                 className={inputClass}
               />
             </div>
@@ -360,13 +365,14 @@ export default function TeamMembers() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[850px] text-left">
+            <table className="w-full min-w-[930px] text-left">
               <thead>
                 <tr className="bg-slate-50 text-xs uppercase tracking-wider text-slate-500">
                   <th className="px-6 py-4 font-semibold">Team Member</th>
                   <th className="px-6 py-4 font-semibold">Email</th>
                   <th className="px-6 py-4 font-semibold">Phone</th>
                   <th className="px-6 py-4 font-semibold">Designation</th>
+                  <th className="px-6 py-4 font-semibold">Login account</th>
                   <th className="px-6 py-4 font-semibold">Status</th>
                   <th className="px-6 py-4 text-right font-semibold">Action</th>
                 </tr>
@@ -403,6 +409,12 @@ export default function TeamMembers() {
 
                     <td className="px-6 py-4 text-sm text-slate-600">
                       {member.designation || "-"}
+                    </td>
+
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${member.profile_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                        {member.profile_id ? "Linked" : "Awaiting matching login"}
+                      </span>
                     </td>
 
                     <td className="px-6 py-4">

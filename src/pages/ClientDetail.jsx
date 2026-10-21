@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import Icon from "../components/Icon"
 
-const stages = ["discovery", "signed", "active", "delivered"]
+const stages = ["discovery", "contacted", "follow_up", "signed", "active", "in_revision", "delivered"]
 
 export default function ClientDetail() {
   const { id } = useParams()
@@ -18,6 +18,11 @@ export default function ClientDetail() {
   const [noteText, setNoteText] = useState("")
   const [taskTitle, setTaskTitle] = useState("")
   const [taskDue, setTaskDue] = useState("")
+  const [conversationMethod, setConversationMethod] = useState("call")
+  const [conversationText, setConversationText] = useState("")
+  const [conversationOutcome, setConversationOutcome] = useState("")
+  const [conversationFollowUp, setConversationFollowUp] = useState("")
+  const [savingConversation, setSavingConversation] = useState(false)
 
   // =========================
   // FETCH ALL DATA
@@ -161,6 +166,55 @@ export default function ClientDetail() {
     fetchAll()
   }
 
+  const addConversation = async (event) => {
+    event.preventDefault()
+    if (!conversationText.trim()) return
+    setSavingConversation(true)
+
+    const { error: activityError } = await supabase.from("activities").insert({
+      client_id: id,
+      type: "conversation",
+      contact_method: conversationMethod,
+      description: conversationText.trim(),
+      outcome: conversationOutcome.trim() || null,
+    })
+
+    if (activityError) {
+      alert(`Could not save conversation: ${activityError.message}`)
+      setSavingConversation(false)
+      return
+    }
+
+    if (conversationFollowUp) {
+      const followUpAt = new Date(conversationFollowUp).toISOString()
+      const { error: clientUpdateError } = await supabase
+        .from("clients")
+        .update({ next_follow_up: followUpAt })
+        .eq("id", id)
+
+      if (clientUpdateError) {
+        alert(`Conversation saved, but follow-up date could not be updated: ${clientUpdateError.message}`)
+      } else {
+        const { error: taskError } = await supabase.from("tasks").insert({
+          client_id: id,
+          title: `Follow up with ${client.name}`,
+          due_date: followUpAt,
+          assigned_to: client.assigned_to || null,
+          status: "pending",
+          priority: "normal",
+          instructions: conversationOutcome.trim() || null,
+        })
+        if (taskError) alert(`Follow-up date saved, but task could not be created: ${taskError.message}`)
+      }
+    }
+
+    setConversationText("")
+    setConversationOutcome("")
+    setConversationFollowUp("")
+    setSavingConversation(false)
+    fetchAll()
+  }
+
   const markTaskDone = async (taskId) => {
     const { error } = await supabase
       .from("tasks")
@@ -207,15 +261,21 @@ export default function ClientDetail() {
 
   const stageStyles = {
     discovery: "bg-orange-50 text-orange-700",
+    contacted: "bg-violet-50 text-violet-700",
+    follow_up: "bg-purple-50 text-purple-700",
     signed: "bg-blue-50 text-blue-700",
     active: "bg-emerald-50 text-emerald-700",
+    in_revision: "bg-fuchsia-50 text-fuchsia-700",
     delivered: "bg-green-50 text-green-700",
   }
 
   const stageDots = {
     discovery: "bg-orange-500",
+    contacted: "bg-violet-500",
+    follow_up: "bg-purple-500",
     signed: "bg-blue-500",
     active: "bg-emerald-500",
+    in_revision: "bg-fuchsia-500",
     delivered: "bg-green-500",
   }
 
@@ -276,7 +336,7 @@ export default function ClientDetail() {
           </h1>
 
           <p className="mt-1.5 text-sm text-gray-500">
-            {client.company || "No company"}
+            {[client.company, client.service_name].filter(Boolean).join(" · ") || "No company or service"}
           </p>
         </div>
 
@@ -295,12 +355,12 @@ export default function ClientDetail() {
           <h2 className="text-lg font-bold">{client.name}</h2>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-gray-500">
-            <a
+            {client.email && <a
               href={`mailto:${client.email}`}
               className="no-underline hover:text-gray-900 hover:underline"
             >
-              ✉ {client.email || "No email"}
-            </a>
+              ✉ {client.email}
+            </a>}
 
             {client.phone && <span>☎ {client.phone}</span>}
 
@@ -350,6 +410,38 @@ export default function ClientDetail() {
           </div>
         </div>
       </div>
+
+      {/* CONVERSATION AND FOLLOW-UP */}
+      <section className={`${card} mb-[18px] overflow-hidden`}>
+        <div className="border-b border-gray-100 px-5 py-4">
+          <h2 className="text-base font-bold">Log a conversation</h2>
+          <p className="mt-1 text-xs text-gray-500">Record the discussion and schedule the next follow-up.</p>
+        </div>
+        <form onSubmit={addConversation} className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
+          <label className={`${label} md:col-span-1`}>
+            Contact method
+            <select className={`${input} mt-1.5`} value={conversationMethod} onChange={(event) => setConversationMethod(event.target.value)}>
+              {["call", "email", "meeting", "whatsapp", "other"].map((method) => <option key={method} value={method}>{method[0].toUpperCase() + method.slice(1)}</option>)}
+            </select>
+          </label>
+          <label className={`${label} md:col-span-1`}>
+            Next follow-up
+            <input className={`${input} mt-1.5`} type="datetime-local" value={conversationFollowUp} onChange={(event) => setConversationFollowUp(event.target.value)} />
+          </label>
+          <label className={`${label} md:col-span-2`}>
+            Discussion
+            <textarea className={`${input} mt-1.5 h-10 min-h-10 py-2`} value={conversationText} onChange={(event) => setConversationText(event.target.value)} placeholder="What did you discuss with the client?" required maxLength={3000} />
+          </label>
+          <label className={`${label} md:col-span-2`}>
+            Outcome / follow-up note
+            <input className={`${input} mt-1.5`} value={conversationOutcome} onChange={(event) => setConversationOutcome(event.target.value)} placeholder="Decision, next step, or reminder" maxLength={1000} />
+          </label>
+          <button type="submit" disabled={savingConversation} className={`${btnDark} self-end disabled:opacity-60`}>
+            {savingConversation ? "Saving..." : "Save conversation"}
+          </button>
+        </form>
+        {client.next_follow_up && <p className="border-t border-gray-100 px-5 py-3 text-xs text-violet-700">Next follow-up: {formatDate(client.next_follow_up)}</p>}
+      </section>
 
       {/* STAT CARDS */}
       <div className="mb-[18px] grid grid-cols-1 gap-3.5 min-[481px]:grid-cols-2 min-[1101px]:grid-cols-4">
@@ -528,6 +620,8 @@ export default function ClientDetail() {
                   <p className="text-[13px] text-gray-600">
                     {activity.description}
                   </p>
+                  {activity.contact_method && <span className="mt-1 block text-xs capitalize text-violet-700">Contacted by {activity.contact_method}</span>}
+                  {activity.outcome && <p className="mt-1 text-xs text-gray-500">Outcome: {activity.outcome}</p>}
                   <span className="mt-0.5 block text-xs text-gray-400">
                     {formatDate(activity.created_at)}
                   </span>

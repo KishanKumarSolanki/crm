@@ -16,9 +16,13 @@ export default function Clients() {
   const [clients, setClients] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
   const [name, setName] = useState("")
+  const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
   const [company, setCompany] = useState("")
+  const [serviceName, setServiceName] = useState("")
+  const [leadSource, setLeadSource] = useState("")
   const [assignedTo, setAssignedTo] = useState("")
+  const [nextFollowUp, setNextFollowUp] = useState("")
 
 
 
@@ -92,9 +96,9 @@ export default function Clients() {
 
   const addClient = async () => {
 
-    if (!name.trim() || !email.trim()) {
+    if (!name.trim() || (!email.trim() && !phone.trim())) {
 
-      alert("Name & Email required")
+      alert("Please enter a client name and either an email or phone number.")
 
       return
 
@@ -112,6 +116,10 @@ export default function Clients() {
         (member) => String(member.id) === assignedTo
       )
 
+      const initialFollowUp = nextFollowUp
+        ? new Date(nextFollowUp).toISOString()
+        : new Date(Date.now() + 86400000).toISOString()
+
 
 
       // Insert client
@@ -126,11 +134,19 @@ export default function Clients() {
 
             name: name.trim(),
 
-            email: email.trim(),
+            phone: phone.trim(),
+
+            email: email.trim() || null,
 
             company: company.trim(),
 
+            service_name: serviceName.trim(),
+
+            lead_source: leadSource.trim(),
+
             assigned_to: assignedMember?.id || null,
+
+            next_follow_up: initialFollowUp,
 
             stage: "discovery",
 
@@ -168,7 +184,8 @@ export default function Clients() {
 
             title: "Follow up with client",
 
-            due_date: new Date(Date.now() + 86400000),
+            due_date: initialFollowUp,
+            assigned_to: assignedMember?.id || null,
 
             status: "pending",
 
@@ -220,6 +237,9 @@ export default function Clients() {
 
       try {
 
+        if (!newClient.email) {
+          welcomeEmailError = new Error("No email address provided; welcome email was skipped.")
+        } else {
         await sendClientWelcomeEmail({
 
           email: newClient.email,
@@ -229,6 +249,7 @@ export default function Clients() {
           company: newClient.company,
 
         })
+        }
 
       } catch (error) {
 
@@ -243,9 +264,13 @@ export default function Clients() {
       // Reset
 
       setName("")
+      setPhone("")
       setEmail("")
       setCompany("")
+      setServiceName("")
+      setLeadSource("")
       setAssignedTo("")
+      setNextFollowUp("")
 
 
 
@@ -262,7 +287,7 @@ export default function Clients() {
 
           : "Unknown email delivery error"
 
-        alert(`Client added, but the welcome email could not be sent: ${message}`)
+        alert(`Client added; welcome email was not sent: ${message}`)
 
       } else {
 
@@ -666,6 +691,41 @@ export default function Clients() {
 
   // =========================
 
+  const exportClientsToCsv = async () => {
+    const ids = filteredClients.map((client) => client.id)
+    const conversationsByClient = new Map()
+    const taskStatusByClient = new Map()
+    if (ids.length) {
+      const [activityResult, taskResult] = await Promise.all([
+        supabase.from("activities").select("client_id, description, created_at").eq("type", "conversation").in("client_id", ids).order("created_at", { ascending: false }),
+        supabase.from("tasks").select("client_id, status, due_date").in("client_id", ids).neq("status", "completed").order("due_date", { ascending: true }),
+      ])
+      if (activityResult.error || taskResult.error) {
+        alert(`Could not prepare export: ${(activityResult.error || taskResult.error).message}`)
+        return
+      }
+      for (const activity of activityResult.data || []) {
+        if (!conversationsByClient.has(String(activity.client_id))) conversationsByClient.set(String(activity.client_id), activity)
+      }
+      for (const task of taskResult.data || []) {
+        if (!taskStatusByClient.has(String(task.client_id))) taskStatusByClient.set(String(task.client_id), task.status)
+      }
+    }
+    const columns = ["Client Name", "Phone Number", "Email", "Company", "Service", "Lead Source", "Assigned To", "Pipeline Stage", "Last Conversation", "Last Discussion", "Next Follow-up", "Task Status"]
+    const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
+    const rows = filteredClients.map((client) => {
+      const conversation = conversationsByClient.get(String(client.id))
+      return [client.name, client.phone, client.email, client.company, client.service_name, client.lead_source, getMemberName(client.assigned_to), formatStage(client.stage), conversation?.created_at ? new Date(conversation.created_at).toLocaleString() : "", conversation?.description, client.next_follow_up ? new Date(client.next_follow_up).toLocaleString() : "", taskStatusByClient.get(String(client.id)) || ""]
+    })
+    const csv = [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }))
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `crm-clients-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   // FILTER CLIENTS
 
   // =========================
@@ -780,9 +840,15 @@ export default function Clients() {
 
     discovery: { badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
 
+    contacted: { badge: "bg-violet-50 text-violet-700", dot: "bg-violet-500" },
+
+    follow_up: { badge: "bg-purple-50 text-purple-700", dot: "bg-purple-500" },
+
     signed: { badge: "bg-blue-50 text-blue-700", dot: "bg-blue-500" },
 
     active: { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+
+    in_revision: { badge: "bg-fuchsia-50 text-fuchsia-700", dot: "bg-fuchsia-500" },
 
     delivered: { badge: "bg-green-50 text-green-700", dot: "bg-green-500" },
 
@@ -986,7 +1052,7 @@ export default function Clients() {
 
 
 
-        <div className="grid grid-cols-1 items-end gap-3 min-[769px]:grid-cols-2 min-[1101px]:grid-cols-[1fr_1fr_1fr_1fr_150px]">
+        <div className="grid grid-cols-1 items-end gap-3 min-[769px]:grid-cols-2 xl:grid-cols-4">
 
           {/* NAME */}
 
@@ -1022,13 +1088,21 @@ export default function Clients() {
 
 
 
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Phone Number</label>
+            <div className={inputWrap}>
+              <span className="flex w-10 items-center justify-center text-sm text-gray-400">+</span>
+              <input type="tel" placeholder="Phone number" value={phone} onChange={(event) => setPhone(event.target.value)} className={inputBase} />
+            </div>
+          </div>
+
           {/* EMAIL */}
 
           <div>
 
             <label className="mb-1.5 block text-xs font-semibold text-gray-700">
 
-              Email Address<span className="ml-0.5 text-red-500">*</span>
+              Email Address <span className="font-normal text-gray-400">(optional)</span>
 
             </label>
 
@@ -1090,6 +1164,20 @@ export default function Clients() {
 
 
 
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Service</label>
+            <div className={inputWrap}>
+              <input type="text" placeholder="e.g. Landing page" value={serviceName} onChange={(event) => setServiceName(event.target.value)} className="h-full w-full bg-transparent px-3 text-sm text-gray-700 outline-none placeholder:text-gray-400" />
+            </div>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Lead source</label>
+            <div className={inputWrap}>
+              <input type="text" placeholder="Website, referral..." value={leadSource} onChange={(event) => setLeadSource(event.target.value)} className="h-full w-full bg-transparent px-3 text-sm text-gray-700 outline-none placeholder:text-gray-400" />
+            </div>
+          </div>
+
           {/* ASSIGNEE */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold text-gray-700">
@@ -1107,6 +1195,11 @@ export default function Clients() {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-gray-700">Next follow-up</label>
+            <input type="datetime-local" value={nextFollowUp} onChange={(event) => setNextFollowUp(event.target.value)} className="h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700" />
           </div>
 
           {/* BUTTON */}
@@ -1193,6 +1286,10 @@ export default function Clients() {
 
           <div className="flex items-center gap-2 max-[768px]:w-full max-[480px]:flex-col max-[480px]:items-stretch">
 
+            <button type="button" onClick={exportClientsToCsv} className={`inline-flex items-center justify-center px-3 ${toolbarControl} hover:bg-violet-50`}>
+              Export Excel
+            </button>
+
             <label
 
               className={`inline-flex cursor-pointer items-center whitespace-nowrap px-3 hover:bg-gray-50 max-[480px]:justify-center ${toolbarControl} ${
@@ -1271,10 +1368,13 @@ export default function Clients() {
 
               <option value="discovery">Discovery</option>
 
+              <option value="contacted">Contacted</option>
+              <option value="follow_up">Follow-up Scheduled</option>
               <option value="signed">Signed</option>
 
               <option value="active">Active</option>
 
+              <option value="in_revision">In Revision</option>
               <option value="delivered">Delivered</option>
 
             </select>
@@ -1295,7 +1395,7 @@ export default function Clients() {
 
               <tr>
 
-                {["CLIENT", "COMPANY", "STAGE", "ASSIGNED TO", "EMAIL", "ACTION"].map((h) => (
+                {["CLIENT", "COMPANY", "SERVICE", "CONTACT", "NEXT FOLLOW-UP", "STAGE", "ASSIGNED TO", "EMAIL", "ACTION"].map((h) => (
 
                   <th
 
@@ -1323,7 +1423,7 @@ export default function Clients() {
 
                 <tr>
 
-                  <td colSpan="6" className="p-0">
+                  <td colSpan="9" className="p-0">
 
                     <div className="px-5 py-14 text-center">
 
@@ -1446,6 +1546,18 @@ export default function Clients() {
                       </td>
 
 
+
+                      <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
+                        {client.service_name || "—"}
+                      </td>
+
+                      <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
+                        {client.phone || "—"}
+                      </td>
+
+                      <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
+                        {client.next_follow_up ? new Date(client.next_follow_up).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                      </td>
 
                       {/* STAGE */}
 

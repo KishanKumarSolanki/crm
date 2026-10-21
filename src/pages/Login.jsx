@@ -48,7 +48,13 @@ export default function Login() {
         return;
       }
 
-      navigate("/");
+      if (profile.role !== "admin" && profile.role !== "staff" && profile.role !== "team_member") {
+        setErrorMessage("This account does not have CRM access. Please contact your administrator.");
+        await supabase.auth.signOut();
+        return;
+      }
+
+      navigate(profile.role === "admin" ? "/" : "/my-dashboard");
     } catch (error) {
       setErrorMessage(error.message || "Something went wrong. Please try again.");
     } finally {

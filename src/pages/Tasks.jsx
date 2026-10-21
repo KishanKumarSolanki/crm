@@ -23,6 +23,7 @@ export default function Tasks() {
   const [dueDate, setDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState("normal");
+  const [instructions, setInstructions] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
 
@@ -102,6 +103,7 @@ export default function Tasks() {
     setDueDate("");
     setAssignedTo("");
     setPriority("normal");
+    setInstructions("");
   };
 
   const saveTask = async (event) => {
@@ -119,6 +121,7 @@ export default function Tasks() {
       due_date: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
       assigned_to: assignedTo || null,
       priority,
+      instructions: instructions.trim() || null,
     };
 
     const result = editingId
@@ -130,6 +133,13 @@ export default function Tasks() {
       setSaving(false);
       return;
     }
+
+    const { error: activityError } = await supabase.from("activities").insert({
+      client_id: clientId,
+      type: editingId ? "task_updated" : "task_assigned",
+      description: `${editingId ? "Updated" : "Assigned"} task: ${title.trim()}${assignedTo ? ` (${teamMembers.find((member) => String(member.id) === assignedTo)?.name || "team member"})` : ""}`,
+    });
+    if (activityError) setError(`Task saved, but its activity could not be recorded: ${activityError.message}`);
 
     resetForm();
     await fetchTasks();
@@ -143,6 +153,7 @@ export default function Tasks() {
     setDueDate(dateInputValue(task.due_date));
     setAssignedTo(task.assigned_to ? String(task.assigned_to) : "");
     setPriority(task.priority || "normal");
+    setInstructions(task.instructions || "");
     setError("");
   };
 
@@ -161,6 +172,14 @@ export default function Tasks() {
       setTasks((current) =>
         current.map((item) => item.id === task.id ? { ...item, status } : item)
       );
+      if (task.client_id) {
+        const { error: activityError } = await supabase.from("activities").insert({
+          client_id: task.client_id,
+          type: status === "completed" ? "task_completed" : "task_reopened",
+          description: `${status === "completed" ? "Completed" : "Reopened"} task: ${task.title || "Untitled Task"}`,
+        });
+        if (activityError) setError(`Task updated, but the activity could not be recorded: ${activityError.message}`);
+      }
     }
     setUpdatingId(null);
   };
@@ -286,6 +305,10 @@ export default function Tasks() {
               ))}
             </select>
           </label>
+          <label className="text-xs font-semibold text-slate-600 md:col-span-2 xl:col-span-2">
+            Instructions
+            <textarea className={`${inputClass} mt-1.5 h-10 min-h-10 py-2`} value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={2000} placeholder="Add context for the assigned team member" />
+          </label>
           <button
             type="submit"
             disabled={saving || clients.length === 0}
@@ -342,6 +365,7 @@ export default function Tasks() {
                       <span>{memberById.get(String(task.assigned_to))?.name || "Unassigned"}</span>
                       <span className={overdue ? "font-semibold text-red-600" : ""}>{overdue ? "Overdue · " : "Due · "}{formatDate(task.due_date)}</span>
                     </div>
+                    {task.instructions && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">{task.instructions}</p>}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${

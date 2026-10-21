@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [activities, setActivities] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [activityPeriod, setActivityPeriod] = useState("all")
 
   const fetchDashboardData = async () => {
     setLoading(true)
@@ -57,7 +58,7 @@ export default function Dashboard() {
         .from("activities")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(8),
+        .limit(100),
 
       supabase
         .from("team_members")
@@ -120,6 +121,31 @@ export default function Dashboard() {
     (client) => client.stage === "signed"
   ).length
 
+  const endOfToday = new Date()
+  endOfToday.setHours(23, 59, 59, 999)
+  const followUpQueue = clients
+    .filter((client) => client.stage === "follow_up" || (client.next_follow_up && new Date(client.next_follow_up) <= endOfToday))
+    .sort((a, b) => {
+      const dateA = a.next_follow_up ? new Date(a.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
+      const dateB = b.next_follow_up ? new Date(b.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
+      return dateA - dateB
+    })
+
+  const visibleActivities = activities.filter((activity) => {
+    if (activityPeriod === "all") return true
+    const date = new Date(activity.created_at)
+    const today = new Date()
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    if (activityPeriod === "today") return date >= startOfToday && date < new Date(startOfToday.getTime() + 86400000)
+    if (activityPeriod === "yesterday") return date >= new Date(startOfToday.getTime() - 86400000) && date < startOfToday
+    const startOfWeek = new Date(startOfToday)
+    startOfWeek.setDate(startOfToday.getDate() - ((startOfToday.getDay() + 6) % 7))
+    if (activityPeriod === "this_week") return date >= startOfWeek
+    const lastWeekStart = new Date(startOfWeek)
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+    return date >= lastWeekStart && date < startOfWeek
+  })
+
   // =========================
   // TEAM WORKLOAD
   // =========================
@@ -166,19 +192,23 @@ export default function Dashboard() {
   const getActivityIcon = (type) => {
     switch (type) {
       case "created":
-        return "＋"
+      case "task_assigned":
+        return "plus"
 
       case "stage_change":
-        return "↗"
+        return "pipeline"
 
       case "task_created":
-        return "✓"
+      case "task_completed":
+      case "task_reopened":
+        return "tasks"
 
       case "note":
-        return "✎"
+      case "conversation":
+        return "clients"
 
       default:
-        return "•"
+        return "dashboard"
     }
   }
 
@@ -286,6 +316,21 @@ export default function Dashboard() {
         ))}
       </div>
 
+      {/* FOLLOW-UP QUEUE */}
+      <section className={`${panel} mb-5`}>
+        <PanelHeader title="Follow-up Queue" text={`${followUpQueue.length} client${followUpQueue.length === 1 ? "" : "s"} need attention`} to="/clients" linkText="View clients →" />
+        {followUpQueue.length === 0 ? <Empty>No clients are waiting for follow-up.</Empty> : (
+          <div className="divide-y divide-slate-100">
+            {followUpQueue.slice(0, 6).map((client) => (
+              <Link key={client.id} to={`/client/${client.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3 text-inherit no-underline hover:bg-violet-50/50">
+                <span className="min-w-0"><strong className="block truncate text-sm font-semibold">{client.name}</strong><span className="text-xs text-slate-500">{teamMembers.find((member) => String(member.id) === String(client.assigned_to))?.name || "Unassigned"}{client.service_name ? ` · ${client.service_name}` : ""}</span></span>
+                <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{client.next_follow_up ? new Date(client.next_follow_up).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Follow-up needed"}</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* MAIN GRID */}
       <div className="mb-5 grid grid-cols-1 gap-5 min-[1101px]:grid-cols-2">
 
@@ -366,19 +411,24 @@ export default function Dashboard() {
 
         {/* RECENT ACTIVITY */}
         <div className={panel}>
-          <PanelHeader title="Recent Activity" text="Latest CRM activity" />
+          <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+            <div><h2 className="text-base font-bold tracking-tight">Activity History</h2><p className="mt-1 text-xs text-slate-400">Client conversations and CRM updates</p></div>
+            <select aria-label="Filter activity by date" value={activityPeriod} onChange={(event) => setActivityPeriod(event.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600">
+              <option value="all">Recent</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="this_week">This Week</option><option value="last_week">Last Week</option>
+            </select>
+          </div>
 
           <div className="flex flex-col">
-            {activities.length === 0 ? (
-              <Empty>No recent activity.</Empty>
+            {visibleActivities.length === 0 ? (
+              <Empty>No activity found for this date range.</Empty>
             ) : (
-              activities.map((activity) => (
+              visibleActivities.slice(0, 8).map((activity) => (
                 <div
                   key={activity.id}
                   className="flex gap-3 border-b border-slate-100 py-3.5 last:border-b-0"
                 >
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-sm font-bold text-blue-600">
-                    {getActivityIcon(activity.type)}
+                    <Icon name={getActivityIcon(activity.type)} size={16} />
                   </div>
 
                   <div className="flex flex-col gap-1">

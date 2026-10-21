@@ -7,13 +7,16 @@ import {
   Draggable,
 } from "@hello-pangea/dnd";
 
-const stages = ["discovery", "signed", "active", "delivered"];
+const stages = ["discovery", "contacted", "follow_up", "signed", "active", "in_revision", "delivered"];
+const stageLabels = { discovery: "New Lead", contacted: "Contacted", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" };
 
 const stageStyles = {
   discovery: {
     badge: "bg-blue-100 text-blue-700",
     dot: "bg-blue-500",
   },
+  contacted: { badge: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },
+  follow_up: { badge: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
   signed: {
     badge: "bg-violet-100 text-violet-700",
     dot: "bg-violet-500",
@@ -22,6 +25,7 @@ const stageStyles = {
     badge: "bg-amber-100 text-amber-700",
     dot: "bg-amber-500",
   },
+  in_revision: { badge: "bg-fuchsia-100 text-fuchsia-700", dot: "bg-fuchsia-500" },
   delivered: {
     badge: "bg-emerald-100 text-emerald-700",
     dot: "bg-emerald-500",
@@ -93,7 +97,13 @@ export default function Pipeline() {
       return;
     }
 
-    setError("");
+    const movedClient = previousClients.find((client) => String(client.id) === clientId);
+    const { error: activityError } = await supabase.from("activities").insert({
+      client_id: clientId,
+      type: "stage_change",
+      description: `Stage changed from ${stageLabels[movedClient?.stage] || movedClient?.stage || "Unknown"} to ${stageLabels[newStage] || newStage}`,
+    });
+    setError(activityError ? `Stage updated, but activity history could not be saved: ${activityError.message}` : "");
   };
 
   return (
@@ -112,7 +122,7 @@ export default function Pipeline() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Track clients and move them through each stage.
+            Manage deals from first enquiry through delivery.
           </p>
         </div>
 
@@ -195,7 +205,7 @@ export default function Pipeline() {
                           />
 
                           <h2 className="truncate text-sm font-bold uppercase tracking-wide text-slate-800">
-                            {stage}
+                            {stageLabels[stage]}
                           </h2>
                         </div>
 
@@ -246,6 +256,8 @@ export default function Pipeline() {
                                     <p className="mt-1 text-xs text-slate-400">
                                       Client #{client.id}
                                     </p>
+                                    {client.service_name && <p className="mt-2 text-xs font-medium text-violet-700">{client.service_name}</p>}
+                                    {client.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {new Date(client.next_follow_up).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</p>}
                                   </div>
 
                                   <span className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-500">
@@ -258,7 +270,7 @@ export default function Pipeline() {
                                   <span
                                     className={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase ${style.badge}`}
                                   >
-                                    {stage}
+                                    {stageLabels[stage]}
                                   </span>
 
                                   <span className="text-[10px] text-slate-400">

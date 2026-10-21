@@ -59,7 +59,7 @@ function AdminRoute({ children }) {
 
   // Not admin
   if (!isAdmin) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/my-dashboard" replace />
   }
 
   // Admin

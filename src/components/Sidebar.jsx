@@ -2,15 +2,16 @@ import { NavLink } from "react-router-dom";
 import Icon from "./Icon";
 
 const menuItems = [
-  { name: "Dashboard", path: "/", icon: "dashboard" },
-  { name: "Clients", path: "/clients", icon: "clients" },
-  { name: "Pipeline", path: "/pipeline", icon: "pipeline" },
-  { name: "Tasks", path: "/tasks", icon: "tasks" },
+  { name: "Dashboard", path: "/", icon: "dashboard", adminOnly: true },
+  { name: "My Dashboard", path: "/my-dashboard", icon: "dashboard", memberOnly: true },
+  { name: "Clients", path: "/clients", icon: "clients", adminOnly: true },
+  { name: "Pipeline", path: "/pipeline", icon: "pipeline", adminOnly: true },
+  { name: "Tasks", path: "/tasks", icon: "tasks", adminOnly: true },
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];
 
 function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM User", role = "" }) {
-  const visibleItems = menuItems.filter((item) => !item.adminOnly || role === "admin");
+  const visibleItems = menuItems.filter((item) => (!item.adminOnly || role === "admin") && (!item.memberOnly || ["staff", "team_member"].includes(role)));
   const initials = userName.split(/\s+/).map((part) => part[0]).join("").slice(0, 2).toUpperCase();
 
   return (
