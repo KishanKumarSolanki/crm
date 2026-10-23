@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 
 const features = [
-  "Keep every client organized in one place.",
+  "Keep every lead organized in one place.",
   "Assign follow-ups and stay aligned as a team.",
   "Track every opportunity from first contact to close.",
 ];
@@ -75,7 +75,7 @@ export default function Login() {
           <BrandMark light />
           <div>
             <div className="text-[15px] font-semibold tracking-[-0.03em]">CRM</div>
-            <div className="mt-0.5 text-[11px] text-violet-200/75">Client relationships, made clear</div>
+            <div className="mt-0.5 text-[11px] text-violet-200/75">Lead relationships, made clear</div>
           </div>
         </div>
 
@@ -87,7 +87,7 @@ export default function Login() {
             Great work starts with <span>great relationships.</span>
           </h1>
           <p className="login-brand-description">
-            Keep clients, follow-ups, and your team moving forward together.
+            Keep leads, follow-ups, and your team moving forward together.
           </p>
 
           <div className="login-features">
@@ -110,7 +110,7 @@ export default function Login() {
             <BrandMark />
             <div>
               <div className="text-sm font-semibold">CRM</div>
-              <div className="text-xs text-slate-500">Client relationships, made clear</div>
+              <div className="text-xs text-slate-500">Lead relationships, made clear</div>
             </div>
           </div>
 
@@ -183,7 +183,7 @@ export default function Login() {
             </button>
           </form>
 
-          <p className="login-privacy">Secure sign-in &middot; Your client and team information stays private</p>
+          <p className="login-privacy">Secure sign-in &middot; Your lead and team information stays private</p>
         </div>
       </section>
       </div>

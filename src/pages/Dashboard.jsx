@@ -28,7 +28,7 @@ const Empty = ({ children }) => (
 )
 
 export default function Dashboard() {
-  const [clients, setClients] = useState([])
+  const [leads, setLeads] = useState([])
   const [tasks, setTasks] = useState([])
   const [activities, setActivities] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
@@ -39,7 +39,7 @@ export default function Dashboard() {
     setLoading(true)
 
     const [
-      clientsResult,
+      leadsResult,
       tasksResult,
       activitiesResult,
       membersResult
@@ -67,8 +67,8 @@ export default function Dashboard() {
         .order("name", { ascending: true })
     ])
 
-    if (clientsResult.error) {
-      console.error("Clients:", clientsResult.error)
+    if (leadsResult.error) {
+      console.error("Leads:", leadsResult.error)
     }
 
     if (tasksResult.error) {
@@ -83,7 +83,7 @@ export default function Dashboard() {
       console.error("Team Members:", membersResult.error)
     }
 
-    setClients(clientsResult.data || [])
+    setLeads(leadsResult.data || [])
     setTasks(tasksResult.data || [])
     setActivities(activitiesResult.data || [])
     setTeamMembers(membersResult.data || [])
@@ -99,32 +99,30 @@ export default function Dashboard() {
   // STATISTICS
   // =========================
 
-  const totalClients = clients.length
+  const totalLeads = leads.length
 
-  const activeClients = clients.filter(
-    (client) => client.stage === "active"
+  const activeLeads = leads.filter(
+    (lead) => lead.stage === "active"
   ).length
 
-  const deliveredClients = clients.filter(
-    (client) => client.stage === "delivered"
+  const deliveredLeads = leads.filter(
+    (lead) => lead.stage === "delivered"
   ).length
 
   const pendingTasks = tasks.filter(
     (task) => task.status !== "completed"
   ).length
 
-  const discoveryClients = clients.filter(
-    (client) => client.stage === "discovery"
+  const discoveryLeads = leads.filter(
+    (lead) => lead.stage === "discovery"
   ).length
 
-  const signedClients = clients.filter(
-    (client) => client.stage === "signed"
+  const signedLeads = leads.filter(
+    (lead) => lead.stage === "signed"
   ).length
 
-  const endOfToday = new Date()
-  endOfToday.setHours(23, 59, 59, 999)
-  const followUpQueue = clients
-    .filter((client) => client.stage === "follow_up" || (client.next_follow_up && new Date(client.next_follow_up) <= endOfToday))
+  const followUpQueue = leads
+    .filter((lead) => lead.stage === "follow_up" || lead.next_follow_up)
     .sort((a, b) => {
       const dateA = a.next_follow_up ? new Date(a.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
       const dateB = b.next_follow_up ? new Date(b.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
@@ -132,6 +130,7 @@ export default function Dashboard() {
     })
 
   const visibleActivities = activities.filter((activity) => {
+    if (!["created", "stage_change", "assigned"].includes(activity.type)) return false
     if (activityPeriod === "all") return true
     const date = new Date(activity.created_at)
     const today = new Date()
@@ -150,20 +149,20 @@ export default function Dashboard() {
   // TEAM WORKLOAD
   // =========================
 
-  const getMemberClients = (memberId) => {
-    return clients.filter(
-      (client) => client.assigned_to === memberId
+  const getMemberLeads = (memberId) => {
+    return leads.filter(
+      (lead) => lead.assigned_to === memberId
     ).length
   }
 
   const getMemberTasks = (memberId) => {
-    const memberClientIds = clients
-      .filter((client) => client.assigned_to === memberId)
-      .map((client) => client.id)
+    const memberLeadIds = leads
+      .filter((lead) => lead.assigned_to === memberId)
+      .map((lead) => lead.id)
 
     return tasks.filter(
       (task) =>
-        memberClientIds.includes(task.client_id) &&
+        memberLeadIds.includes(task.client_id) &&
         task.status !== "completed"
     ).length
   }
@@ -175,7 +174,8 @@ export default function Dashboard() {
   const getStageLabel = (stage) => {
     if (!stage) return "Unknown"
 
-    return stage.charAt(0).toUpperCase() + stage.slice(1)
+    const labels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" }
+    return labels[stage] || stage.charAt(0).toUpperCase() + stage.slice(1)
   }
 
   const getActivityTime = (date) => {
@@ -192,11 +192,13 @@ export default function Dashboard() {
   const getActivityIcon = (type) => {
     switch (type) {
       case "created":
-      case "task_assigned":
         return "plus"
 
       case "stage_change":
         return "pipeline"
+
+      case "assigned":
+        return "team"
 
       case "task_created":
       case "task_completed":
@@ -205,7 +207,7 @@ export default function Dashboard() {
 
       case "note":
       case "conversation":
-        return "clients"
+        return "leads"
 
       default:
         return "dashboard"
@@ -226,23 +228,23 @@ export default function Dashboard() {
   }
 
   const statCards = [
-    { label: "Total Clients", value: totalClients, icon: "clients", tone: "blue", note: "All clients", rest: "in CRM", noteClass: "text-violet-700" },
-    { label: "Active Clients", value: activeClients, icon: "pipeline", tone: "green", note: "Active", rest: "projects", noteClass: "text-violet-700" },
-    { label: "Delivered", value: deliveredClients, icon: "tasks", tone: "purple", note: "Completed", rest: "projects", noteClass: "text-violet-700" },
+    { label: "Total Leads", value: totalLeads, icon: "leads", tone: "blue", note: "All leads", rest: "in CRM", noteClass: "text-violet-700" },
+    { label: "Active Leads", value: activeLeads, icon: "pipeline", tone: "green", note: "Active", rest: "projects", noteClass: "text-violet-700" },
+    { label: "Delivered", value: deliveredLeads, icon: "tasks", tone: "purple", note: "Completed", rest: "projects", noteClass: "text-violet-700" },
     { label: "Pending Tasks", value: pendingTasks, icon: "tasks", tone: "orange", note: "Needs attention", rest: "", noteClass: "text-violet-700" },
   ]
 
   const pipelineRows = [
-    { label: "Discovery", value: discoveryClients, dot: "bg-slate-500" },
-    { label: "Signed", value: signedClients, dot: "bg-violet-500" },
-    { label: "Active", value: activeClients, dot: "bg-emerald-500" },
-    { label: "Delivered", value: deliveredClients, dot: "bg-blue-600" },
+    { label: "Discovery", value: discoveryLeads, dot: "bg-slate-500" },
+    { label: "Signed", value: signedLeads, dot: "bg-violet-500" },
+    { label: "Active", value: activeLeads, dot: "bg-emerald-500" },
+    { label: "Delivered", value: deliveredLeads, dot: "bg-blue-600" },
   ]
 
   const quickActions = [
-    { to: "/clients", tone: "blue", icon: "plus", title: "Add Client", text: "Create a new client" },
+    { to: "/leads", tone: "blue", icon: "plus", title: "Add Lead", text: "Create a new lead" },
     { to: "/team-members", tone: "green", icon: "team", title: "Add Team Member", text: "Add someone to your team" },
-    { to: "/pipeline", tone: "purple", icon: "pipeline", title: "Open Pipeline", text: "Manage client stages" },
+    { to: "/pipeline", tone: "purple", icon: "pipeline", title: "Open Pipeline", text: "Manage lead stages" },
     { to: "/tasks", tone: "orange", icon: "tasks", title: "View Tasks", text: "Check pending work" },
   ]
 
@@ -274,23 +276,23 @@ export default function Dashboard() {
           </h1>
 
           <p className="mt-2 text-sm text-slate-500">
-            Keep track of your clients, tasks and team activity.
+            Keep track of your leads, tasks and team activity.
           </p>
         </div>
 
         <div className="flex gap-2.5 max-[700px]:w-full">
           <Link
-            to="/clients"
+            to="/leads"
             className="rounded-[9px] border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 no-underline transition hover:bg-slate-50 max-[700px]:flex-1"
           >
-            View Clients
+            View Leads
           </Link>
 
           <Link
-            to="/clients"
+            to="/leads"
             className="rounded-[9px] bg-blue-600 px-4 py-2.5 text-center text-sm font-semibold text-white no-underline shadow-[0_5px_15px_rgba(37,99,235,0.18)] transition hover:-translate-y-px hover:bg-blue-700 max-[700px]:flex-1"
           >
-            + Add Client
+            + Add Lead
           </Link>
         </div>
       </div>
@@ -318,13 +320,13 @@ export default function Dashboard() {
 
       {/* FOLLOW-UP QUEUE */}
       <section className={`${panel} mb-5`}>
-        <PanelHeader title="Follow-up Queue" text={`${followUpQueue.length} client${followUpQueue.length === 1 ? "" : "s"} need attention`} to="/clients" linkText="View clients →" />
-        {followUpQueue.length === 0 ? <Empty>No clients are waiting for follow-up.</Empty> : (
+        <PanelHeader title="Follow-up Queue" text={`${followUpQueue.length} lead${followUpQueue.length === 1 ? "" : "s"} need attention`} to="/leads" linkText="View leads →" />
+        {followUpQueue.length === 0 ? <Empty>No leads are waiting for follow-up.</Empty> : (
           <div className="divide-y divide-slate-100">
-            {followUpQueue.slice(0, 6).map((client) => (
-              <Link key={client.id} to={`/client/${client.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3 text-inherit no-underline hover:bg-violet-50/50">
-                <span className="min-w-0"><strong className="block truncate text-sm font-semibold">{client.name}</strong><span className="text-xs text-slate-500">{teamMembers.find((member) => String(member.id) === String(client.assigned_to))?.name || "Unassigned"}{client.service_name ? ` · ${client.service_name}` : ""}</span></span>
-                <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{client.next_follow_up ? new Date(client.next_follow_up).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Follow-up needed"}</span>
+            {followUpQueue.slice(0, 6).map((lead) => (
+              <Link key={lead.id} to={`/lead/${lead.id}`} className="flex flex-wrap items-center justify-between gap-3 py-3 text-inherit no-underline hover:bg-violet-50/50">
+                <span className="min-w-0"><strong className="block truncate text-sm font-semibold">{lead.name}</strong><span className="text-xs text-slate-500">{teamMembers.find((member) => String(member.id) === String(lead.assigned_to))?.name || "Unassigned"}{lead.service_name ? ` · ${lead.service_name}` : ""}</span></span>
+                <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{lead.next_follow_up ? new Date(lead.next_follow_up).toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "Follow-up needed"}</span>
               </Link>
             ))}
           </div>
@@ -337,8 +339,8 @@ export default function Dashboard() {
         {/* PIPELINE */}
         <div className={panel}>
           <PanelHeader
-            title="Client Pipeline"
-            text="Current distribution of your clients"
+            title="Lead Pipeline"
+            text="Current distribution of your leads"
             to="/pipeline"
             linkText="View Pipeline →"
           />
@@ -360,7 +362,7 @@ export default function Dashboard() {
         <div className={panel}>
           <PanelHeader
             title="Team Workload"
-            text="Assigned clients and pending tasks"
+            text="Assigned leads and pending tasks"
             to="/team-members"
             linkText="View Team →"
           />
@@ -370,7 +372,7 @@ export default function Dashboard() {
               <Empty>No active team members.</Empty>
             ) : (
               teamMembers.slice(0, 5).map((member) => {
-                const memberClients = getMemberClients(member.id)
+                const memberLeads = getMemberLeads(member.id)
                 const memberTasks = getMemberTasks(member.id)
 
                 return (
@@ -391,8 +393,8 @@ export default function Dashboard() {
                     </div>
 
                     <div className="flex min-w-[55px] flex-col items-end">
-                      <strong className="text-sm">{memberClients}</strong>
-                      <span className="text-xs text-slate-400">clients</span>
+                      <strong className="text-sm">{memberLeads}</strong>
+                      <span className="text-xs text-slate-400">leads</span>
                     </div>
 
                     <div className="flex h-7 min-w-[28px] items-center justify-center rounded-lg bg-orange-50 text-xs font-bold text-orange-600">
@@ -412,7 +414,7 @@ export default function Dashboard() {
         {/* RECENT ACTIVITY */}
         <div className={panel}>
           <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-            <div><h2 className="text-base font-bold tracking-tight">Activity History</h2><p className="mt-1 text-xs text-slate-400">Client conversations and CRM updates</p></div>
+            <div><h2 className="text-base font-bold tracking-tight">Activity History</h2><p className="mt-1 text-xs text-slate-400">New leads, stage changes and assignments</p></div>
             <select aria-label="Filter activity by date" value={activityPeriod} onChange={(event) => setActivityPeriod(event.target.value)} className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600">
               <option value="all">Recent</option><option value="today">Today</option><option value="yesterday">Yesterday</option><option value="this_week">This Week</option><option value="last_week">Last Week</option>
             </select>
@@ -472,43 +474,43 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* RECENT CLIENTS */}
+      {/* RECENT LEADS */}
       <div className={`${panel} mb-2.5`}>
         <PanelHeader
-          title="Recent Clients"
-          text="Recently added clients"
-          to="/clients"
+          title="Recent Leads"
+          text="Recently added leads"
+          to="/leads"
           linkText="View All →"
         />
 
         <div className="flex flex-col">
-          {clients.length === 0 ? (
-            <Empty>No clients found.</Empty>
+          {leads.length === 0 ? (
+            <Empty>No leads found.</Empty>
           ) : (
-            clients.slice(0, 5).map((client) => {
+            leads.slice(0, 5).map((lead) => {
               const assignedMember = teamMembers.find(
-                (member) => member.id === client.assigned_to
+                (member) => member.id === lead.assigned_to
               )
 
               return (
                 <Link
-                  key={client.id}
-                  to={`/client/${client.id}`}
+                  key={lead.id}
+                  to={`/lead/${lead.id}`}
                   className="flex items-center gap-3.5 border-t border-slate-100 px-2 py-3.5 text-inherit no-underline transition hover:bg-slate-50 max-[700px]:gap-2.5"
                 >
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-blue-50 text-sm font-bold text-blue-600">
-                    {client.name ? client.name.charAt(0).toUpperCase() : "?"}
+                    {lead.name ? lead.name.charAt(0).toUpperCase() : "?"}
                   </div>
 
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                    <strong className="truncate text-sm">{client.name}</strong>
+                    <strong className="truncate text-sm">{lead.name}</strong>
                     <span className="truncate text-xs text-slate-400">
-                      {client.company || client.email}
+                      {lead.company || lead.email}
                     </span>
                   </div>
 
                   <div className="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 max-[700px]:hidden">
-                    {getStageLabel(client.stage)}
+                    {getStageLabel(lead.stage)}
                   </div>
 
                   <div className="w-[100px] truncate text-xs text-slate-500 max-[700px]:hidden">

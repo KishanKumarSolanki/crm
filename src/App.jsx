@@ -1,14 +1,22 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom"
+import { lazy, Suspense } from "react"
+import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-dom"
 
-import Login from "./pages/Login"
-import Dashboard from "./pages/Dashboard"
-import Clients from "./pages/Clients"
-import ClientDetail from "./pages/ClientDetail"
-import Pipeline from "./pages/Pipeline"
-import Tasks from "./pages/Tasks"
-import TeamMembers from "./pages/TeamMembers"
-import TeamMemberDetail from "./pages/TeamMemberDetail"
-import TeamMemberDashboard from "./pages/TeamMemberDashboard"
+const Login = lazy(() => import("./pages/Login"))
+const Dashboard = lazy(() => import("./pages/Dashboard"))
+const Leads = lazy(() => import("./pages/Leads"))
+const LeadDetail = lazy(() => import("./pages/LeadDetail"))
+const Pipeline = lazy(() => import("./pages/Pipeline"))
+const Tasks = lazy(() => import("./pages/Tasks"))
+const TeamMembers = lazy(() => import("./pages/TeamMembers"))
+const TeamMemberDetail = lazy(() => import("./pages/TeamMemberDetail"))
+const TeamMemberDashboard = lazy(() => import("./pages/TeamMemberDashboard"))
+const LandingPage = lazy(() => import("./pages/LandingPage"))
+const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
+
+function LegacyLeadDetailRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/lead/${id}`} replace />
+}
 
 import ProtectedRoute from "./components/ProtectedRoute"
 import AdminRoute from "./components/AdminRoute"
@@ -19,6 +27,7 @@ function App() {
   return (
     <BrowserRouter>
 
+      <Suspense fallback={<div className="grid min-h-screen place-items-center bg-[#f7f8fa] text-sm text-slate-500">Loading page…</div>}>
       <Routes>
 
         {/* =========================
@@ -29,6 +38,8 @@ function App() {
           path="/login"
           element={<Login />}
         />
+
+        <Route path="/landing" element={<LandingPage />} />
 
 
         {/* =========================
@@ -50,20 +61,24 @@ function App() {
           />
 
           <Route path="/my-dashboard" element={<TeamMemberRoute><TeamMemberDashboard /></TeamMemberRoute>} />
+          <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
 
 
-          {/* CLIENTS */}
+          {/* LEADS */}
           <Route
-            path="/clients"
-            element={<AdminRoute><Clients /></AdminRoute>}
+            path="/leads"
+            element={<AdminRoute><Leads /></AdminRoute>}
           />
+          <Route path="/clients" element={<Navigate to="/leads" replace />} />
+          <Route path="/client" element={<Navigate to="/leads" replace />} />
 
 
-          {/* CLIENT DETAIL */}
+          {/* LEAD DETAIL */}
           <Route
-            path="/client/:id"
-            element={<ClientDetail />}
+            path="/lead/:id"
+            element={<LeadDetail />}
           />
+          <Route path="/client/:id" element={<LegacyLeadDetailRedirect />} />
 
 
           {/* PIPELINE */}
@@ -104,6 +119,7 @@ function App() {
         </Route>
 
       </Routes>
+      </Suspense>
 
     </BrowserRouter>
   )

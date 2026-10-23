@@ -1,14 +1,15 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
+import { sendWelcomeEmailWhenContacted } from "../lib/email";
 import {
   DragDropContext,
   Droppable,
   Draggable,
 } from "@hello-pangea/dnd";
 
-const stages = ["discovery", "contacted", "follow_up", "signed", "active", "in_revision", "delivered"];
-const stageLabels = { discovery: "New Lead", contacted: "Contacted", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" };
+const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "active", "in_revision", "delivered"];
+const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" };
 
 const stageStyles = {
   discovery: {
@@ -16,6 +17,8 @@ const stageStyles = {
     dot: "bg-blue-500",
   },
   contacted: { badge: "bg-violet-100 text-violet-700", dot: "bg-violet-500" },
+  qualified: { badge: "bg-emerald-100 text-emerald-700", dot: "bg-emerald-500" },
+  meeting_booked: { badge: "bg-cyan-100 text-cyan-700", dot: "bg-cyan-500" },
   follow_up: { badge: "bg-purple-100 text-purple-700", dot: "bg-purple-500" },
   signed: {
     badge: "bg-violet-100 text-violet-700",
@@ -33,11 +36,11 @@ const stageStyles = {
 };
 
 export default function Pipeline() {
-  const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchClients = async () => {
+  const fetchLeads = async () => {
     setLoading(true);
     setError("");
 
@@ -48,14 +51,14 @@ export default function Pipeline() {
     if (error) {
       setError(error.message);
     } else {
-      setClients(data || []);
+      setLeads(data || []);
     }
 
     setLoading(false);
   };
 
   useEffect(() => {
-    fetchClients();
+    fetchLeads();
   }, []);
 
   // Drag End Handler
@@ -72,38 +75,62 @@ export default function Pipeline() {
       return;
     }
 
-    const clientId = draggableId;
+    const leadId = draggableId;
     const newStage = destination.droppableId;
 
     // Optimistically update the UI
-    const previousClients = clients;
+    const previousLeads = leads;
 
-    setClients((currentClients) =>
-      currentClients.map((client) =>
-        String(client.id) === clientId
-          ? { ...client, stage: newStage }
-          : client
+    setLeads((currentLeads) =>
+      currentLeads.map((lead) =>
+        String(lead.id) === leadId
+          ? { ...lead, stage: newStage }
+          : lead
       )
     );
 
     const { error } = await supabase
       .from("clients")
       .update({ stage: newStage })
-      .eq("id", clientId);
+      .eq("id", leadId);
 
     if (error) {
-      setClients(previousClients);
+      setLeads(previousLeads);
       setError("Unable to update stage. Please try again.");
       return;
     }
 
-    const movedClient = previousClients.find((client) => String(client.id) === clientId);
+    const movedLead = previousLeads.find((lead) => String(lead.id) === leadId);
     const { error: activityError } = await supabase.from("activities").insert({
-      client_id: clientId,
+      client_id: leadId,
       type: "stage_change",
-      description: `Stage changed from ${stageLabels[movedClient?.stage] || movedClient?.stage || "Unknown"} to ${stageLabels[newStage] || newStage}`,
+      description: `Stage changed from ${stageLabels[movedLead?.stage] || movedLead?.stage || "Unknown"} to ${stageLabels[newStage] || newStage}`,
     });
-    setError(activityError ? `Stage updated, but activity history could not be saved: ${activityError.message}` : "");
+    const { error: eventError } = await supabase.functions.invoke("process-meta-events", { body: { limit: 20 } });
+    if (eventError) console.warn("Meta conversion events will be retried later:", eventError.message);
+
+    const messages = [];
+    if (activityError) messages.push(`Stage updated, but activity history could not be saved: ${activityError.message}`);
+
+    if (newStage === "contacted" && movedLead) {
+      try {
+        const emailResult = await sendWelcomeEmailWhenContacted({ supabase, lead: movedLead });
+        if (emailResult.status === "sent") {
+          setLeads((currentLeads) => currentLeads.map((lead) =>
+            String(lead.id) === leadId
+              ? { ...lead, welcome_email_sent_at: emailResult.sentAt }
+              : lead
+          ));
+          messages.push(`Welcome email sent to ${movedLead.email}.`);
+        } else if (emailResult.status === "missing_email") {
+          messages.push("Lead moved to Contacted, but it has no email address for the welcome email.");
+        }
+      } catch (emailError) {
+        messages.push(`Lead moved to Contacted, but the welcome email failed: ${emailError.message}`);
+      }
+    }
+
+    setError(messages.join(" "));
   };
 
   return (
@@ -144,9 +171,9 @@ export default function Pipeline() {
           </div>
 
           <div>
-            <p className="text-xs text-slate-500">Total Clients</p>
+            <p className="text-xs text-slate-500">Total Leads</p>
             <p className="text-xl font-bold text-slate-900">
-              {clients.length}
+              {leads.length}
             </p>
           </div>
         </div>
@@ -177,8 +204,8 @@ export default function Pipeline() {
           <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 2xl:grid-cols-4">
 
             {stages.map((stage) => {
-              const stageClients = clients.filter(
-                (client) => client.stage === stage
+              const stageLeads = leads.filter(
+                (lead) => lead.stage === stage
               );
 
               const style = stageStyles[stage];
@@ -212,18 +239,18 @@ export default function Pipeline() {
                         <span
                           className={`rounded-lg px-2.5 py-1 text-xs font-bold ${style.badge}`}
                         >
-                          {stageClients.length}
+                          {stageLeads.length}
                         </span>
                       </div>
 
-                      {/* Client Cards */}
+                      {/* Lead Cards */}
                       <div className="flex flex-col gap-3">
 
-                        {stageClients.map((client, index) => (
+                        {stageLeads.map((lead, index) => (
                           <Draggable
-                            draggableId={String(client.id)}
+                            draggableId={String(lead.id)}
                             index={index}
-                            key={client.id}
+                            key={lead.id}
                           >
                             {(provided, snapshot) => (
                               <article
@@ -243,21 +270,21 @@ export default function Pipeline() {
                                 <div className="flex items-start gap-3">
 
                                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold uppercase text-slate-600">
-                                    {client.name
+                                    {lead.name
                                       ?.trim()
                                       ?.charAt(0) || "C"}
                                   </div>
 
                                   <div className="min-w-0 flex-1">
                                     <h3 className="break-words text-sm font-semibold text-slate-900">
-                                      {client.name || "Unnamed Client"}
+                                      {lead.name || "Unnamed Lead"}
                                     </h3>
 
                                     <p className="mt-1 text-xs text-slate-400">
-                                      Client #{client.id}
+                                      Lead #{lead.id}
                                     </p>
-                                    {client.service_name && <p className="mt-2 text-xs font-medium text-violet-700">{client.service_name}</p>}
-                                    {client.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {new Date(client.next_follow_up).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</p>}
+                                    {lead.service_name && <p className="mt-2 text-xs font-medium text-violet-700">{lead.service_name}</p>}
+                                    {lead.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {new Date(lead.next_follow_up).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</p>}
                                   </div>
 
                                   <span className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-500">
@@ -286,18 +313,18 @@ export default function Pipeline() {
                         {provided.placeholder}
 
                         {/* Empty State */}
-                        {stageClients.length === 0 && (
+                        {stageLeads.length === 0 && (
                           <div className="flex min-h-36 flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 px-4 text-center">
                             <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-white text-xl text-slate-400">
                               +
                             </div>
 
                             <p className="text-xs font-medium text-slate-500">
-                              No clients yet
+                              No leads yet
                             </p>
 
                             <p className="mt-1 text-[11px] text-slate-400">
-                              Drop a client here
+                              Drop a lead here
                             </p>
                           </div>
                         )}

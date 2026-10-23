@@ -4,16 +4,14 @@ import readXlsxFile from "read-excel-file/browser"
 
 import { supabase } from "../lib/supabase"
 
-import { sendClientWelcomeEmail } from "../lib/email"
-
 import { Link } from "react-router-dom"
 import Icon from "../components/Icon"
 
 
 
-export default function Clients() {
+export default function Leads() {
 
-  const [clients, setClients] = useState([])
+  const [leads, setLeads] = useState([])
   const [teamMembers, setTeamMembers] = useState([])
   const [name, setName] = useState("")
   const [phone, setPhone] = useState("")
@@ -32,6 +30,7 @@ export default function Clients() {
 
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
+  const [leadCategory, setLeadCategory] = useState("all")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
@@ -39,13 +38,13 @@ export default function Clients() {
 
   // =========================
 
-  // FETCH CLIENTS
+  // FETCH LEADS
 
   // =========================
 
 
 
-  const loadClientRecords = useCallback(() => Promise.all([
+  const loadLeadRecords = useCallback(() => Promise.all([
       supabase
         .from("clients")
         .select("*")
@@ -56,11 +55,11 @@ export default function Clients() {
         .order("name", { ascending: true }),
     ]), [])
 
-  const applyClientRecords = useCallback(([clientsResult, membersResult]) => {
-    if (clientsResult.error) {
-      console.error("Client fetch error:", clientsResult.error)
+  const applyLeadRecords = useCallback(([leadsResult, membersResult]) => {
+    if (leadsResult.error) {
+      console.error("Lead fetch error:", leadsResult.error)
     } else {
-      setClients(clientsResult.data || [])
+      setLeads(leadsResult.data || [])
     }
 
     if (membersResult.error) {
@@ -70,35 +69,35 @@ export default function Clients() {
     }
   }, [])
 
-  const fetchClients = async () => applyClientRecords(await loadClientRecords())
+  const fetchLeads = async () => applyLeadRecords(await loadLeadRecords())
 
 
 
   useEffect(() => {
     let active = true
-    loadClientRecords()
+    loadLeadRecords()
       .then((records) => {
-        if (active) applyClientRecords(records)
+        if (active) applyLeadRecords(records)
       })
-      .catch((error) => console.error("Client records fetch error:", error))
+      .catch((error) => console.error("Lead records fetch error:", error))
     return () => { active = false }
-  }, [applyClientRecords, loadClientRecords])
+  }, [applyLeadRecords, loadLeadRecords])
 
 
 
   // =========================
 
-  // ADD CLIENT WITH AUTOMATION
+  // ADD LEAD WITH AUTOMATION
 
   // =========================
 
 
 
-  const addClient = async () => {
+  const addLead = async () => {
 
     if (!name.trim() || (!email.trim() && !phone.trim())) {
 
-      alert("Please enter a client name and either an email or phone number.")
+      alert("Please enter a lead name and either an email or phone number.")
 
       return
 
@@ -122,7 +121,7 @@ export default function Clients() {
 
 
 
-      // Insert client
+      // Insert lead
 
       const { data, error } = await supabase
 
@@ -162,11 +161,7 @@ export default function Clients() {
 
 
 
-      const newClient = data[0]
-
-
-
-      let welcomeEmailError
+      const newLead = data[0]
 
 
 
@@ -180,9 +175,9 @@ export default function Clients() {
 
           {
 
-            client_id: newClient.id,
+            client_id: newLead.id,
 
-            title: "Follow up with client",
+            title: "Follow up with lead",
 
             due_date: initialFollowUp,
             assigned_to: assignedMember?.id || null,
@@ -213,13 +208,13 @@ export default function Clients() {
 
           {
 
-            client_id: newClient.id,
+            client_id: newLead.id,
 
             type: "created",
 
             description: assignedMember
-              ? `Client created and assigned to ${assignedMember.name}`
-              : "Client created without an assignee",
+              ? `Lead created and assigned to ${assignedMember.name}`
+              : "Lead created without an assignee",
 
           },
 
@@ -230,32 +225,6 @@ export default function Clients() {
       if (activityError) {
 
         console.error("Activity error:", activityError)
-
-      }
-
-
-
-      try {
-
-        if (!newClient.email) {
-          welcomeEmailError = new Error("No email address provided; welcome email was skipped.")
-        } else {
-        await sendClientWelcomeEmail({
-
-          email: newClient.email,
-
-          name: newClient.name,
-
-          company: newClient.company,
-
-        })
-        }
-
-      } catch (error) {
-
-        console.error("Welcome email error:", error)
-
-        welcomeEmailError = error
 
       }
 
@@ -274,26 +243,12 @@ export default function Clients() {
 
 
 
-      await fetchClients()
+      await fetchLeads()
       setPage(1)
 
 
 
-      if (welcomeEmailError) {
-
-        const message = welcomeEmailError instanceof Error
-
-          ? welcomeEmailError.message
-
-          : "Unknown email delivery error"
-
-        alert(`Client added; welcome email was not sent: ${message}`)
-
-      } else {
-
-        alert("Client added and welcome email sent")
-
-      }
+      alert("Lead added. The welcome email will be sent when you move it to Contacted.")
 
     } catch (err) {
 
@@ -309,7 +264,7 @@ export default function Clients() {
 
 
 
-  const importClientsFromExcel = async (event) => {
+  const importLeadsFromExcel = async (event) => {
 
     const file = event.target.files?.[0]
 
@@ -329,7 +284,7 @@ export default function Clients() {
 
       if (rows.length < 2) {
 
-        throw new Error("Workbook needs a header row and at least one client row.")
+        throw new Error("Workbook needs a header row and at least one lead row.")
 
       }
 
@@ -343,7 +298,7 @@ export default function Clients() {
 
       const nameIndex = headers.findIndex((header) =>
 
-        ["name", "clientname", "fullname"].includes(header)
+        ["name", "leadname", "fullname"].includes(header)
 
       )
 
@@ -393,7 +348,7 @@ export default function Clients() {
 
       if (!importedRows.length) {
 
-        throw new Error("No client rows were found in this workbook.")
+        throw new Error("No lead rows were found in this workbook.")
 
       }
 
@@ -401,7 +356,7 @@ export default function Clients() {
 
       const knownEmails = new Set(
 
-        clients.map((client) => client.email?.trim().toLowerCase()).filter(Boolean)
+        leads.map((lead) => lead.email?.trim().toLowerCase()).filter(Boolean)
 
       )
 
@@ -412,8 +367,6 @@ export default function Clients() {
       let skipped = 0
 
       let failed = 0
-
-      let emailFailures = 0
 
       const failureDetails = []
 
@@ -447,7 +400,7 @@ export default function Clients() {
 
         try {
 
-          const { data: newClient, error } = await supabase
+          const { data: newLead, error } = await supabase
 
             .from("clients")
 
@@ -487,9 +440,9 @@ export default function Clients() {
 
             .insert({
 
-              client_id: newClient.id,
+              client_id: newLead.id,
 
-              title: "Follow up with client",
+              title: "Follow up with lead",
 
               due_date: new Date(Date.now() + 86400000),
 
@@ -497,7 +450,7 @@ export default function Clients() {
 
             })
 
-          if (taskError) console.error("Imported client task error:", taskError)
+          if (taskError) console.error("Imported lead task error:", taskError)
 
 
 
@@ -507,57 +460,31 @@ export default function Clients() {
 
             .insert({
 
-              client_id: newClient.id,
+              client_id: newLead.id,
 
               type: "created",
 
               description: assignedTo
-                ? `Client imported and assigned to ${
+                ? `Lead imported and assigned to ${
                     teamMembers.find((member) => String(member.id) === assignedTo)?.name || "a team member"
                   }`
-                : "Client imported without an assignee",
+                : "Lead imported without an assignee",
 
             })
 
-          if (activityError) console.error("Imported client activity error:", activityError)
+          if (activityError) console.error("Imported lead activity error:", activityError)
 
 
-
-          try {
-
-            await sendClientWelcomeEmail({
-
-              email: newClient.email,
-
-              name: newClient.name,
-
-              company: newClient.company,
-
-            })
-
-          } catch (error) {
-
-            emailFailures += 1
-
-            console.error("Imported client welcome email error:", error)
-
-            if (failureDetails.length < 3) {
-
-              failureDetails.push(`Email failed for row ${row.rowNumber}`)
-
-            }
-
-          }
 
         } catch (error) {
 
           failed += 1
 
-          console.error(`Client import failed on row ${row.rowNumber}:`, error)
+          console.error(`Lead import failed on row ${row.rowNumber}:`, error)
 
           if (failureDetails.length < 3) {
 
-            failureDetails.push(`Client row ${row.rowNumber} could not be saved`)
+            failureDetails.push(`Lead row ${row.rowNumber} could not be saved`)
 
           }
 
@@ -567,17 +494,17 @@ export default function Clients() {
 
 
 
-      await fetchClients()
+      await fetchLeads()
       setPage(1)
       const summary = [
 
-        `Clients added: ${added}`,
+        `Leads added: ${added}`,
 
         `Skipped (invalid or duplicate): ${skipped}`,
 
         `Could not save: ${failed}`,
 
-        `Welcome emails failed: ${emailFailures}`,
+        "Welcome emails will be sent when leads are moved to Contacted.",
 
       ]
 
@@ -601,12 +528,12 @@ export default function Clients() {
 
   // =========================
 
-  // DELETE CLIENT
+  // DELETE LEAD
   // =========================
 
-  const handleDeleteClient = async (client) => {
+  const handleDeleteLead = async (lead) => {
     const confirmed = window.confirm(
-      `Are you sure you want to delete "${client.name}"? This will also delete this client's notes, tasks, and activity history.`
+      `Are you sure you want to delete "${lead.name}"? This will also delete this lead's notes, tasks, and activity history.`
     )
 
     if (!confirmed) return
@@ -617,7 +544,7 @@ export default function Clients() {
         const { error } = await supabase
           .from(table)
           .delete()
-          .eq("client_id", client.id)
+          .eq("client_id", lead.id)
 
         if (error) throw error
       }
@@ -625,18 +552,18 @@ export default function Clients() {
       const { error } = await supabase
         .from("clients")
         .delete()
-        .eq("id", client.id)
+        .eq("id", lead.id)
 
       if (error) throw error
 
-      setClients((currentClients) =>
-        currentClients.filter((item) => item.id !== client.id)
+      setLeads((currentLeads) =>
+        currentLeads.filter((item) => item.id !== lead.id)
       )
       setPage(1)
-      alert("Client deleted successfully.")
+      alert("Lead deleted successfully.")
     } catch (error) {
-      console.error("Delete client error:", error)
-      alert(`Could not delete client: ${error.message || "Unknown error"}`)
+      console.error("Delete lead error:", error)
+      alert(`Could not delete lead: ${error.message || "Unknown error"}`)
     }
   }
 
@@ -649,7 +576,7 @@ export default function Clients() {
 
 
 
-  const addNote = async (clientId, noteText) => {
+  const addNote = async (leadId, noteText) => {
 
     if (!noteText || !noteText.trim()) return
 
@@ -663,7 +590,7 @@ export default function Clients() {
 
         {
 
-          client_id: clientId,
+          client_id: leadId,
 
           note: noteText.trim(),
 
@@ -691,10 +618,10 @@ export default function Clients() {
 
   // =========================
 
-  const exportClientsToCsv = async () => {
-    const ids = filteredClients.map((client) => client.id)
-    const conversationsByClient = new Map()
-    const taskStatusByClient = new Map()
+  const exportLeadsToCsv = async () => {
+    const ids = filteredLeads.map((lead) => lead.id)
+    const conversationsByLead = new Map()
+    const taskStatusByLead = new Map()
     if (ids.length) {
       const [activityResult, taskResult] = await Promise.all([
         supabase.from("activities").select("client_id, description, created_at").eq("type", "conversation").in("client_id", ids).order("created_at", { ascending: false }),
@@ -705,36 +632,39 @@ export default function Clients() {
         return
       }
       for (const activity of activityResult.data || []) {
-        if (!conversationsByClient.has(String(activity.client_id))) conversationsByClient.set(String(activity.client_id), activity)
+        if (!conversationsByLead.has(String(activity.client_id))) conversationsByLead.set(String(activity.client_id), activity)
       }
       for (const task of taskResult.data || []) {
-        if (!taskStatusByClient.has(String(task.client_id))) taskStatusByClient.set(String(task.client_id), task.status)
+        if (!taskStatusByLead.has(String(task.client_id))) taskStatusByLead.set(String(task.client_id), task.status)
       }
     }
-    const columns = ["Client Name", "Phone Number", "Email", "Company", "Service", "Lead Source", "Assigned To", "Pipeline Stage", "Last Conversation", "Last Discussion", "Next Follow-up", "Task Status"]
+    const columns = ["Lead Name", "Phone Number", "Email", "Company", "Service", "Lead Source", "Assigned To", "Pipeline Stage", "Last Conversation", "Last Discussion", "Next Follow-up", "Task Status"]
     const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
-    const rows = filteredClients.map((client) => {
-      const conversation = conversationsByClient.get(String(client.id))
-      return [client.name, client.phone, client.email, client.company, client.service_name, client.lead_source, getMemberName(client.assigned_to), formatStage(client.stage), conversation?.created_at ? new Date(conversation.created_at).toLocaleString() : "", conversation?.description, client.next_follow_up ? new Date(client.next_follow_up).toLocaleString() : "", taskStatusByClient.get(String(client.id)) || ""]
+    const rows = filteredLeads.map((lead) => {
+      const conversation = conversationsByLead.get(String(lead.id))
+      return [lead.name, lead.phone, lead.email, lead.company, lead.service_name, lead.lead_source, getMemberName(lead.assigned_to), formatStage(lead.stage), conversation?.created_at ? new Date(conversation.created_at).toLocaleString() : "", conversation?.description, lead.next_follow_up ? new Date(lead.next_follow_up).toLocaleString() : "", taskStatusByLead.get(String(lead.id)) || ""]
     })
     const csv = [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n")
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = url
-    link.download = `crm-clients-${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `crm-leads-${new Date().toISOString().slice(0, 10)}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
 
-  // FILTER CLIENTS
+  // FILTER LEADS
 
   // =========================
 
 
 
-  const filteredClients = clients.filter((client) => {
+  const filteredLeads = leads.filter((lead) => {
 
     const query = search.toLowerCase().trim()
+
+    const matchesCategory =
+      leadCategory === "all" || lead.lead_source?.trim().toLowerCase() === "igs"
 
 
 
@@ -742,11 +672,11 @@ export default function Clients() {
 
       !query ||
 
-      client.name?.toLowerCase().includes(query) ||
+      lead.name?.toLowerCase().includes(query) ||
 
-      client.email?.toLowerCase().includes(query) ||
+      lead.email?.toLowerCase().includes(query) ||
 
-      client.company?.toLowerCase().includes(query)
+      lead.company?.toLowerCase().includes(query)
 
 
 
@@ -754,19 +684,19 @@ export default function Clients() {
 
       stageFilter === "all" ||
 
-      client.stage === stageFilter
+      lead.stage === stageFilter
 
 
 
-    return matchesSearch && matchesStage
+    return matchesCategory && matchesSearch && matchesStage
 
   })
 
   // =========================
 
-  const totalPages = Math.max(1, Math.ceil(filteredClients.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize))
   const currentPage = Math.min(page, totalPages)
-  const visibleClients = filteredClients.slice(
+  const visibleLeads = filteredLeads.slice(
     (currentPage - 1) * pageSize,
     currentPage * pageSize
   )
@@ -780,33 +710,33 @@ export default function Clients() {
 
 
 
-  const totalClients = clients.length
+  const totalLeads = leads.length
 
 
 
-  const discoveryClients = clients.filter(
+  const discoveryLeads = leads.filter(
 
-    (client) => client.stage === "discovery"
-
-  ).length
-
-
-
-  const activeClients = clients.filter(
-
-    (client) =>
-
-      client.stage === "active" ||
-
-      client.stage === "signed"
+    (lead) => lead.stage === "discovery"
 
   ).length
 
 
 
-  const deliveredClients = clients.filter(
+  const activeLeads = leads.filter(
 
-    (client) => client.stage === "delivered"
+    (lead) =>
+
+      lead.stage === "active" ||
+
+      lead.stage === "signed"
+
+  ).length
+
+
+
+  const deliveredLeads = leads.filter(
+
+    (lead) => lead.stage === "delivered"
 
   ).length
 
@@ -823,6 +753,9 @@ export default function Clients() {
   const formatStage = (stage) => {
 
     if (!stage) return "Unknown"
+
+    const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" }
+    if (stageLabels[stage]) return stageLabels[stage]
 
 
 
@@ -841,6 +774,8 @@ export default function Clients() {
     discovery: { badge: "bg-orange-50 text-orange-700", dot: "bg-orange-500" },
 
     contacted: { badge: "bg-violet-50 text-violet-700", dot: "bg-violet-500" },
+    qualified: { badge: "bg-emerald-50 text-emerald-700", dot: "bg-emerald-500" },
+    meeting_booked: { badge: "bg-cyan-50 text-cyan-700", dot: "bg-cyan-500" },
 
     follow_up: { badge: "bg-purple-50 text-purple-700", dot: "bg-purple-500" },
 
@@ -888,19 +823,19 @@ export default function Clients() {
 
 
 
-  const card = "clients-card rounded-2xl border border-gray-200 bg-white shadow-sm"
+  const card = "leads-card rounded-2xl border border-gray-200 bg-white shadow-sm"
 
 
 
   const statCards = [
 
-    { label: "Total Clients", value: totalClients, icon: "◉", color: "bg-violet-50 text-violet-600" },
+    { label: "Total Leads", value: totalLeads, icon: "◉", color: "bg-violet-50 text-violet-600" },
 
-    { label: "Discovery", value: discoveryClients, icon: "◌", color: "bg-orange-50 text-orange-500" },
+    { label: "Discovery", value: discoveryLeads, icon: "◌", color: "bg-orange-50 text-orange-500" },
 
-    { label: "Active", value: activeClients, icon: "↗", color: "bg-emerald-50 text-emerald-600" },
+    { label: "Active", value: activeLeads, icon: "↗", color: "bg-emerald-50 text-emerald-600" },
 
-    { label: "Delivered", value: deliveredClients, icon: "✓", color: "bg-blue-50 text-blue-600" },
+    { label: "Delivered", value: deliveredLeads, icon: "✓", color: "bg-blue-50 text-blue-600" },
 
   ]
 
@@ -926,19 +861,19 @@ export default function Clients() {
 
   return (
 
-    <div className="clients-page w-full text-gray-900">
+    <div className="leads-page w-full text-gray-900">
 
 
 
       {/* HEADER */}
 
-      <div className="clients-heading mb-[22px] flex items-end justify-between max-[768px]:items-start">
+      <div className="leads-heading mb-[22px] flex items-end justify-between max-[768px]:items-start">
 
         <div>
 
           <div className="mb-2 text-xs text-gray-400">
 
-            CRM <span className="mx-1.5 text-gray-300">/</span> Clients
+            CRM <span className="mx-1.5 text-gray-300">/</span> Leads
 
           </div>
 
@@ -946,7 +881,7 @@ export default function Clients() {
 
           <h1 className="text-[22px] font-bold tracking-tight min-[481px]:text-[28px]">
 
-            Clients
+            Leads
 
           </h1>
 
@@ -954,7 +889,7 @@ export default function Clients() {
 
           <p className="mt-1.5 text-sm text-gray-500">
 
-            Manage your clients, pipeline and relationships.
+            Manage your leads, pipeline and relationships.
 
           </p>
 
@@ -970,7 +905,7 @@ export default function Clients() {
 
           </span>
 
-          <strong className="mt-0.5 text-[22px]">{totalClients}</strong>
+          <strong className="mt-0.5 text-[22px]">{totalLeads}</strong>
 
         </div>
 
@@ -984,11 +919,11 @@ export default function Clients() {
 
         {statCards.map((item) => (
 
-          <div key={item.label} className={`${card} clients-stat flex min-h-[88px] items-center gap-3.5 p-4`}>
+          <div key={item.label} className={`${card} leads-stat flex min-h-[88px] items-center gap-3.5 p-4`}>
 
             <div className={`flex h-11 w-11 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
 
-              <Icon name={item.icon === "!" ? "tasks" : item.icon === "+" ? "plus" : item.icon === "◉" ? "clients" : item.icon === "↗" ? "pipeline" : "tasks"} size={18} />
+              <Icon name={item.icon === "!" ? "tasks" : item.icon === "+" ? "plus" : item.icon === "◉" ? "leads" : item.icon === "↗" ? "pipeline" : "tasks"} size={18} />
 
             </div>
 
@@ -1010,7 +945,7 @@ export default function Clients() {
 
 
 
-      {/* ADD CLIENT CARD */}
+      {/* ADD LEAD CARD */}
 
       <div className={`${card} mb-[18px] p-5 max-[480px]:p-3.5`}>
 
@@ -1028,11 +963,11 @@ export default function Clients() {
 
             <div>
 
-              <h2 className="text-base font-bold">Add New Client</h2>
+              <h2 className="text-base font-bold">Add New Lead</h2>
 
               <p className="mt-0.5 text-xs text-gray-400">
 
-                Create a new client and automatically assign follow-up.
+                Create a new lead and automatically assign follow-up.
 
               </p>
 
@@ -1060,7 +995,7 @@ export default function Clients() {
 
             <label className="mb-1.5 block text-xs font-semibold text-gray-700">
 
-              Client Name<span className="ml-0.5 text-red-500">*</span>
+              Lead Name<span className="ml-0.5 text-red-500">*</span>
 
             </label>
 
@@ -1072,7 +1007,7 @@ export default function Clients() {
 
                 type="text"
 
-                placeholder="Enter client name"
+                placeholder="Enter lead name"
 
                 value={name}
 
@@ -1114,7 +1049,7 @@ export default function Clients() {
 
                 type="email"
 
-                placeholder="client@example.com"
+                placeholder="lead@example.com"
 
                 value={email}
 
@@ -1208,11 +1143,11 @@ export default function Clients() {
 
             <button
 
-              onClick={addClient}
+              onClick={addLead}
 
               disabled={loading || importing}
 
-              className="clients-primary flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#321073] text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#42149b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+              className="leads-primary flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-[#321073] text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-[#42149b] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
 
             >
 
@@ -1232,7 +1167,7 @@ export default function Clients() {
 
                   <span className="text-base leading-none">+</span>
 
-                  Add Client
+                  Add Lead
 
                 </>
 
@@ -1252,7 +1187,7 @@ export default function Clients() {
 
           <span>
 
-            Adding a client automatically creates a follow-up task and activity record.
+            Adding a lead automatically creates a follow-up task and activity record.
 
           </span>
 
@@ -1262,21 +1197,45 @@ export default function Clients() {
 
 
 
-      {/* CLIENT LIST */}
+      {/* LEAD LIST */}
 
-      <div className={`${card} clients-table-card overflow-hidden`}>
+      <div className={`${card} leads-table-card overflow-hidden`}>
+
+        <div role="tablist" aria-label="Lead categories" className="flex gap-2 overflow-x-auto border-b border-gray-100 px-5 pt-4">
+          {[
+            { id: "all", label: "All", count: leads.length },
+            { id: "igs", label: "IGS", count: leads.filter((lead) => lead.lead_source?.trim().toLowerCase() === "igs").length },
+          ].map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              role="tab"
+              aria-selected={leadCategory === category.id}
+              onClick={() => {
+                setLeadCategory(category.id)
+                setPage(1)
+              }}
+              className={`inline-flex shrink-0 items-center gap-2 rounded-t-lg border-b-2 px-4 py-2.5 text-sm font-semibold transition ${leadCategory === category.id ? "border-violet-700 bg-violet-50 text-violet-800" : "border-transparent text-gray-500 hover:bg-gray-50 hover:text-gray-800"}`}
+            >
+              {category.label}
+              <span className={`rounded-full px-2 py-0.5 text-xs ${leadCategory === category.id ? "bg-violet-100 text-violet-800" : "bg-gray-100 text-gray-500"}`}>
+                {category.count}
+              </span>
+            </button>
+          ))}
+        </div>
 
         <div className="flex min-h-[72px] items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 max-[480px]:flex-col max-[480px]:items-start">
 
           <div>
 
-            <h2 className="text-base font-bold">All Clients</h2>
+            <h2 className="text-base font-bold">All Leads</h2>
 
             <p className="mt-0.5 text-xs text-gray-400">
 
-              Showing {visibleClients.length} of {filteredClients.length} matching client
+              Showing {visibleLeads.length} of {filteredLeads.length} matching lead
 
-              {filteredClients.length !== 1 ? "s" : ""}
+              {filteredLeads.length !== 1 ? "s" : ""}
 
             </p>
 
@@ -1286,7 +1245,7 @@ export default function Clients() {
 
           <div className="flex items-center gap-2 max-[768px]:w-full max-[480px]:flex-col max-[480px]:items-stretch">
 
-            <button type="button" onClick={exportClientsToCsv} className={`inline-flex items-center justify-center px-3 ${toolbarControl} hover:bg-violet-50`}>
+            <button type="button" onClick={exportLeadsToCsv} className={`inline-flex items-center justify-center px-3 ${toolbarControl} hover:bg-violet-50`}>
               Export Excel
             </button>
 
@@ -1308,7 +1267,7 @@ export default function Clients() {
 
                 accept=".xlsx"
 
-                onChange={importClientsFromExcel}
+                onChange={importLeadsFromExcel}
 
                 disabled={importing}
 
@@ -1332,7 +1291,7 @@ export default function Clients() {
 
                 type="text"
 
-                placeholder="Search clients..."
+                placeholder="Search leads..."
 
                 value={search}
 
@@ -1369,6 +1328,8 @@ export default function Clients() {
               <option value="discovery">Discovery</option>
 
               <option value="contacted">Contacted</option>
+              <option value="qualified">Qualified</option>
+              <option value="meeting_booked">Meeting Booked</option>
               <option value="follow_up">Follow-up Scheduled</option>
               <option value="signed">Signed</option>
 
@@ -1391,11 +1352,11 @@ export default function Clients() {
 
           <table className="w-full min-w-[950px] border-collapse">
 
-            <thead className="clients-table-head bg-gray-50">
+            <thead className="leads-table-head bg-gray-50">
 
               <tr>
 
-                {["CLIENT", "COMPANY", "SERVICE", "CONTACT", "NEXT FOLLOW-UP", "STAGE", "ASSIGNED TO", "EMAIL", "ACTION"].map((h) => (
+                {["LEAD", "COMPANY", "SERVICE", "CONTACT", "NEXT FOLLOW-UP", "STAGE", "ASSIGNED TO", "EMAIL", "ACTION"].map((h) => (
 
                   <th
 
@@ -1419,7 +1380,7 @@ export default function Clients() {
 
             <tbody>
 
-              {filteredClients.length === 0 ? (
+              {filteredLeads.length === 0 ? (
 
                 <tr>
 
@@ -1437,11 +1398,11 @@ export default function Clients() {
 
                       <h3 className="text-sm font-semibold text-gray-700">
 
-                        {clients.length === 0
+                        {leads.length === 0
 
-                          ? "No clients yet"
+                          ? "No leads yet"
 
-                          : "No matching clients"}
+                          : "No matching leads"}
 
                       </h3>
 
@@ -1449,9 +1410,9 @@ export default function Clients() {
 
                       <p className="mt-1 text-xs text-gray-400">
 
-                        {clients.length === 0
+                        {leads.length === 0
 
-                          ? "Add your first client using the form above."
+                          ? "Add your first lead using the form above."
 
                           : "Try changing your search or stage filter."}
 
@@ -1465,9 +1426,9 @@ export default function Clients() {
 
               ) : (
 
-                visibleClients.map((client) => {
+                visibleLeads.map((lead) => {
 
-                  const stage = getStageStyle(client.stage)
+                  const stage = getStageStyle(lead.stage)
 
 
 
@@ -1475,27 +1436,27 @@ export default function Clients() {
 
                     <tr
 
-                      key={client.id}
+                      key={lead.id}
 
                       className="transition-colors last:[&>td]:border-b-0 hover:bg-gray-50"
 
                     >
 
-                      {/* CLIENT */}
+                      {/* LEAD */}
 
                       <td className="border-b border-gray-100 px-5 py-3 text-[13px] text-gray-600">
 
                         <Link
 
-                          to={`/client/${client.id}`}
+                          to={`/lead/${lead.id}`}
 
-                          className="clients-name-link flex items-center gap-2.5 text-inherit no-underline"
+                          className="leads-name-link flex items-center gap-2.5 text-inherit no-underline"
 
                         >
 
-                          <div className="clients-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-[13px] font-bold text-violet-700">
+                          <div className="leads-avatar flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-[13px] font-bold text-violet-700">
 
-                            {client.name?.charAt(0)?.toUpperCase() || "C"}
+                            {lead.name?.charAt(0)?.toUpperCase() || "C"}
 
                           </div>
 
@@ -1505,13 +1466,13 @@ export default function Clients() {
 
                             <strong className="text-sm font-semibold text-gray-900">
 
-                              {client.name}
+                              {lead.name}
 
                             </strong>
 
                             <span className="mt-0.5 text-xs text-gray-400">
 
-                              ID: {client.id.slice(0, 8)}
+                              ID: {lead.id.slice(0, 8)}
 
                             </span>
 
@@ -1537,7 +1498,7 @@ export default function Clients() {
 
                           <span className="whitespace-nowrap">
 
-                            {client.company || "No company"}
+                            {lead.company || "No company"}
 
                           </span>
 
@@ -1548,15 +1509,15 @@ export default function Clients() {
 
 
                       <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
-                        {client.service_name || "—"}
+                        {lead.service_name || "—"}
                       </td>
 
                       <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
-                        {client.phone || "—"}
+                        {lead.phone || "—"}
                       </td>
 
                       <td className="border-b border-gray-100 px-5 py-3 text-xs text-gray-600">
-                        {client.next_follow_up ? new Date(client.next_follow_up).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
+                        {lead.next_follow_up ? new Date(lead.next_follow_up).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }) : "—"}
                       </td>
 
                       {/* STAGE */}
@@ -1567,7 +1528,7 @@ export default function Clients() {
 
                           <i className={`h-1.5 w-1.5 rounded-full ${stage.dot}`}></i>
 
-                          {formatStage(client.stage)}
+                          {formatStage(lead.stage)}
 
                         </span>
 
@@ -1583,7 +1544,7 @@ export default function Clients() {
 
                           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">
 
-                            {getMemberInitial(getMemberName(client.assigned_to))}
+                            {getMemberInitial(getMemberName(lead.assigned_to))}
 
                           </div>
 
@@ -1593,7 +1554,7 @@ export default function Clients() {
 
                             <strong className="text-[13px] font-semibold text-gray-700">
 
-                              {getMemberName(client.assigned_to)}
+                              {getMemberName(lead.assigned_to)}
 
                             </strong>
 
@@ -1617,13 +1578,13 @@ export default function Clients() {
 
                         <a
 
-                          href={`mailto:${client.email}`}
+                          href={`mailto:${lead.email}`}
 
                           className="text-[13px] text-gray-500 no-underline hover:text-gray-900 hover:underline"
 
                         >
 
-                          {client.email}
+                          {lead.email}
 
                         </a>
 
@@ -1639,9 +1600,9 @@ export default function Clients() {
 
                           <Link
 
-                            to={`/client/${client.id}`}
+                            to={`/lead/${lead.id}`}
 
-                            className="clients-primary inline-flex h-8 items-center justify-center rounded-lg bg-[#321073] px-3 text-xs font-semibold text-white no-underline hover:bg-[#42149b]"
+                            className="leads-primary inline-flex h-8 items-center justify-center rounded-lg bg-[#321073] px-3 text-xs font-semibold text-white no-underline hover:bg-[#42149b]"
 
                           >
 
@@ -1663,7 +1624,7 @@ export default function Clients() {
 
                               if (note) {
 
-                                addNote(client.id, note)
+                                addNote(lead.id, note)
 
                               }
 
@@ -1677,7 +1638,7 @@ export default function Clients() {
 
                           <button
                             type="button"
-                            onClick={() => handleDeleteClient(client)}
+                            onClick={() => handleDeleteLead(lead)}
                             className="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                           >
                             Delete
@@ -1701,7 +1662,7 @@ export default function Clients() {
 
         </div>
 
-        {filteredClients.length > 0 && (
+        {filteredLeads.length > 0 && (
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-5 py-4">
             <label className="flex items-center gap-2 text-xs text-gray-500">
               Rows per page
@@ -1721,7 +1682,7 @@ export default function Clients() {
             <div className="flex items-center gap-3 text-xs text-gray-500">
               <span>
                 {(currentPage - 1) * pageSize + 1}–
-                {Math.min(currentPage * pageSize, filteredClients.length)} of {filteredClients.length}
+                {Math.min(currentPage * pageSize, filteredLeads.length)} of {filteredLeads.length}
               </span>
               <button
                 type="button"

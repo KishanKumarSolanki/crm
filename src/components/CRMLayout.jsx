@@ -12,7 +12,7 @@ function CRMLayout() {
   const [profile, setProfile] = useState(null);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState({ clients: [], tasks: [] });
+  const [searchResults, setSearchResults] = useState({ leads: [], tasks: [] });
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -68,12 +68,12 @@ function CRMLayout() {
       if (error) {
         if (active) setSearchError(`Search failed: ${error.message}`);
       } else if (active) {
-        const clientsById = new Map(
+        const leadsById = new Map(
           [...(nameResult.data || []), ...(emailResult.data || []), ...(companyResult.data || [])]
-            .map((client) => [String(client.id), client])
+            .map((lead) => [String(lead.id), lead])
         );
         setSearchResults({
-          clients: [...clientsById.values()].slice(0, 5),
+          leads: [...leadsById.values()].slice(0, 5),
           tasks: taskResult.data || [],
         });
       }
@@ -140,11 +140,12 @@ function CRMLayout() {
     const path = location.pathname;
     if (path === "/") return "Dashboard";
     if (path === "/my-dashboard") return "My Dashboard";
-    if (path === "/clients") return "Clients";
+    if (path === "/leads") return "Leads";
     if (path === "/pipeline") return "Pipeline";
+    if (path === "/marketing") return "Marketing Analytics";
     if (path === "/tasks") return "Tasks";
     if (path === "/team-members") return "Team Members";
-    if (path.startsWith("/client/")) return "Client Details";
+    if (path.startsWith("/lead/")) return "Lead Details";
     if (path.startsWith("/team-member/")) return "Team Member";
     return "CRM";
   };
@@ -156,7 +157,7 @@ function CRMLayout() {
     setSearch(value);
     setSearchOpen(true);
     if (value.trim().length < 2) {
-      setSearchResults({ clients: [], tasks: [] });
+      setSearchResults({ leads: [], tasks: [] });
       setSearchError("");
       setSearchLoading(false);
     }
@@ -194,8 +195,8 @@ function CRMLayout() {
                 <Icon name="search" size={17} className="text-gray-400" />
                 <input
                   type="search"
-                  aria-label="Search clients and tasks"
-                  placeholder="Search clients and tasks..."
+                  aria-label="Search leads and tasks"
+                  placeholder="Search leads and tasks..."
                   value={search}
                   onFocus={() => { setSearchOpen(true); setNotificationsOpen(false); }}
                   onChange={handleSearchChange}
@@ -204,7 +205,7 @@ function CRMLayout() {
               </div>
               <button
                 type="button"
-                aria-label="Search clients and tasks"
+                aria-label="Search leads and tasks"
                 onClick={() => { setSearchOpen((open) => !open); setNotificationsOpen(false); }}
                 className="flex h-[36px] w-[36px] items-center justify-center rounded-lg border border-gray-200 bg-white text-lg text-gray-500 hover:bg-gray-50 min-[650px]:hidden"
               >
@@ -214,8 +215,8 @@ function CRMLayout() {
                 <div className="absolute right-0 top-11 z-[1100] max-h-[70vh] w-[min(360px,90vw)] overflow-y-auto rounded-xl border border-gray-200 bg-white p-3 shadow-xl">
                   <input
                     type="search"
-                    aria-label="Search clients and tasks"
-                    placeholder="Search clients and tasks..."
+                    aria-label="Search leads and tasks"
+                    placeholder="Search leads and tasks..."
                     value={search}
                     onChange={handleSearchChange}
                     className="mb-2 h-10 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-blue-500 min-[650px]:hidden"
@@ -226,17 +227,17 @@ function CRMLayout() {
                     <p className="p-2 text-xs text-gray-500">Searching...</p>
                   ) : searchError ? (
                     <p role="alert" className="p-2 text-xs text-red-600">{searchError}</p>
-                  ) : searchResults.clients.length === 0 && searchResults.tasks.length === 0 ? (
-                    <p className="p-2 text-xs text-gray-500">No matching clients or tasks.</p>
+                  ) : searchResults.leads.length === 0 && searchResults.tasks.length === 0 ? (
+                    <p className="p-2 text-xs text-gray-500">No matching leads or tasks.</p>
                   ) : (
                     <>
-                      {searchResults.clients.length > 0 && (
+                      {searchResults.leads.length > 0 && (
                         <section>
-                          <h2 className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Clients</h2>
-                          {searchResults.clients.map((client) => (
-                            <Link key={client.id} to={`/client/${client.id}`} onClick={() => { setSearchOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 text-sm no-underline hover:bg-gray-50">
-                              <span className="block font-semibold text-gray-800">{client.name}</span>
-                              <span className="block truncate text-xs text-gray-500">{client.company || client.email || "Client"}</span>
+                          <h2 className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Leads</h2>
+                          {searchResults.leads.map((lead) => (
+                            <Link key={lead.id} to={`/lead/${lead.id}`} onClick={() => { setSearchOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 text-sm no-underline hover:bg-gray-50">
+                              <span className="block font-semibold text-gray-800">{lead.name}</span>
+                              <span className="block truncate text-xs text-gray-500">{lead.company || lead.email || "Lead"}</span>
                             </Link>
                           ))}
                         </section>
@@ -245,7 +246,7 @@ function CRMLayout() {
                         <section className="mt-2 border-t border-gray-100 pt-2">
                           <h2 className="px-2 pb-1 text-[11px] font-bold uppercase tracking-wider text-gray-400">Tasks</h2>
                           {searchResults.tasks.map((task) => (
-                            <Link key={task.id} to={task.client_id ? `/client/${task.client_id}` : "/tasks"} onClick={() => { setSearchOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 text-sm text-gray-700 no-underline hover:bg-gray-50">
+                            <Link key={task.id} to={task.client_id ? `/lead/${task.client_id}` : "/tasks"} onClick={() => { setSearchOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 text-sm text-gray-700 no-underline hover:bg-gray-50">
                               {task.title || "Untitled Task"}
                             </Link>
                           ))}
@@ -264,7 +265,7 @@ function CRMLayout() {
                 aria-label="Task reminders"
                 aria-expanded={notificationsOpen}
                 onClick={toggleNotifications}
-                className="relative h-[36px] w-[36px] rounded-lg border border-gray-200 bg-white text-lg text-gray-500 transition hover:bg-gray-50 min-[481px]:h-[38px] min-[481px]:w-[38px]"
+                className="relative flex h-[36px] w-[36px] shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 transition hover:bg-gray-50 min-[481px]:h-[38px] min-[481px]:w-[38px]"
               >
                 <Icon name="bell" size={18} />
                 {notifications.length > 0 && <span className="absolute -right-1 -top-1 flex h-[17px] min-w-[17px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{notifications.length}</span>}
@@ -282,7 +283,7 @@ function CRMLayout() {
                   ) : notifications.length === 0 ? (
                     <p className="p-2 text-xs text-gray-500">No tasks due in the next 24 hours.</p>
                   ) : notifications.slice(0, 8).map((task) => (
-                    <Link key={task.id} to={task.client_id ? `/client/${task.client_id}` : "/tasks"} onClick={() => { setNotificationsOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 no-underline hover:bg-gray-50">
+                    <Link key={task.id} to={task.client_id ? `/lead/${task.client_id}` : "/tasks"} onClick={() => { setNotificationsOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 no-underline hover:bg-gray-50">
                       <span className="block truncate text-sm font-medium text-gray-800">{task.title || "Untitled Task"}</span>
                       <span className={`text-xs ${task.overdue ? "text-red-600" : "text-amber-600"}`}>
                         {new Date(task.due_date).toLocaleString()}

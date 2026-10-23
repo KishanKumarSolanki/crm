@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
+import { sendWelcomeEmailWhenContacted } from "../lib/email"
 import Icon from "../components/Icon"
 
-const stages = ["discovery", "contacted", "follow_up", "signed", "active", "in_revision", "delivered"]
+const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "active", "in_revision", "delivered"]
+const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" }
 
-export default function ClientDetail() {
+export default function LeadDetail() {
   const { id } = useParams()
 
-  const [client, setClient] = useState(null)
+  const [lead, setLead] = useState(null)
   const [teamMembers, setTeamMembers] = useState([])
   const [tasks, setTasks] = useState([])
   const [activities, setActivities] = useState([])
@@ -23,26 +25,29 @@ export default function ClientDetail() {
   const [conversationOutcome, setConversationOutcome] = useState("")
   const [conversationFollowUp, setConversationFollowUp] = useState("")
   const [savingConversation, setSavingConversation] = useState(false)
+  const [revenueAmount, setRevenueAmount] = useState("")
+  const [savingRevenue, setSavingRevenue] = useState(false)
 
   // =========================
   // FETCH ALL DATA
   // =========================
 
   const fetchAll = async () => {
-    const { data: clientData, error: clientError } = await supabase
+    const { data: leadData, error: leadError } = await supabase
       .from("clients")
       .select("*")
       .eq("id", id)
       .single()
 
-    if (clientError) {
-      console.error("Client fetch error:", clientError)
-      setClient(null)
+    if (leadError) {
+      console.error("Lead fetch error:", leadError)
+      setLead(null)
       setLoading(false)
       return
     }
 
-    setClient(clientData)
+    setLead(leadData)
+    setRevenueAmount(leadData.revenue_amount ?? "")
 
     const [membersRes, tasksRes, activitiesRes, notesRes] = await Promise.all([
       supabase
@@ -92,6 +97,8 @@ export default function ClientDetail() {
   }
 
   const updateStage = async (newStage) => {
+    const oldStage = lead?.stage
+    if (newStage === oldStage) return
     const { error } = await supabase
       .from("clients")
       .update({ stage: newStage })
@@ -102,8 +109,35 @@ export default function ClientDetail() {
       return
     }
 
-    await logActivity("stage", `Stage changed to ${newStage}`)
+    await logActivity("stage_change", `Stage changed from ${stageLabels[oldStage] || oldStage || "Unknown"} to ${stageLabels[newStage] || newStage}`)
+    const { error: eventError } = await supabase.functions.invoke("process-meta-events", { body: { limit: 20 } })
+    if (eventError) console.warn("Meta conversion events will be retried later:", eventError.message)
+
+    if (newStage === "contacted") {
+      try {
+        const emailResult = await sendWelcomeEmailWhenContacted({ supabase, lead: { ...lead, stage: newStage } })
+        if (emailResult.status === "sent") {
+          alert(`Welcome email sent to ${lead.email}.`)
+        } else if (emailResult.status === "missing_email") {
+          alert("Stage updated, but this lead has no email address for the welcome email.")
+        }
+      } catch (emailError) {
+        alert(`Stage updated, but the welcome email failed: ${emailError.message}`)
+      }
+    }
+
     fetchAll()
+  }
+
+  const updateRevenue = async (event) => {
+    event.preventDefault()
+    const value = revenueAmount === "" ? null : Number(revenueAmount)
+    if (value !== null && (!Number.isFinite(value) || value < 0)) return
+    setSavingRevenue(true)
+    const { error } = await supabase.from("clients").update({ revenue_amount: value }).eq("id", id)
+    if (error) alert(`Could not save sale value: ${error.message}`)
+    else fetchAll()
+    setSavingRevenue(false)
   }
 
   const updateAssignee = async (memberId) => {
@@ -120,7 +154,7 @@ export default function ClientDetail() {
     const member = teamMembers.find((m) => m.id === memberId)
     await logActivity(
       "assigned",
-      member ? `Client assigned to ${member.name}` : "Client unassigned"
+      member ? `Lead assigned to ${member.name}` : "Lead unassigned"
     )
     fetchAll()
   }
@@ -187,19 +221,19 @@ export default function ClientDetail() {
 
     if (conversationFollowUp) {
       const followUpAt = new Date(conversationFollowUp).toISOString()
-      const { error: clientUpdateError } = await supabase
+      const { error: leadUpdateError } = await supabase
         .from("clients")
         .update({ next_follow_up: followUpAt })
         .eq("id", id)
 
-      if (clientUpdateError) {
-        alert(`Conversation saved, but follow-up date could not be updated: ${clientUpdateError.message}`)
+      if (leadUpdateError) {
+        alert(`Conversation saved, but follow-up date could not be updated: ${leadUpdateError.message}`)
       } else {
         const { error: taskError } = await supabase.from("tasks").insert({
           client_id: id,
-          title: `Follow up with ${client.name}`,
+          title: `Follow up with ${lead.name}`,
           due_date: followUpAt,
-          assigned_to: client.assigned_to || null,
+          assigned_to: lead.assigned_to || null,
           status: "pending",
           priority: "normal",
           instructions: conversationOutcome.trim() || null,
@@ -244,7 +278,7 @@ export default function ClientDetail() {
         })
       : ""
 
-  const assignee = teamMembers.find((m) => m.id === client?.assigned_to)
+  const assignee = teamMembers.find((m) => m.id === lead?.assigned_to)
 
   // =========================
   // STYLES (Tailwind)
@@ -262,6 +296,8 @@ export default function ClientDetail() {
   const stageStyles = {
     discovery: "bg-orange-50 text-orange-700",
     contacted: "bg-violet-50 text-violet-700",
+    qualified: "bg-emerald-50 text-emerald-700",
+    meeting_booked: "bg-cyan-50 text-cyan-700",
     follow_up: "bg-purple-50 text-purple-700",
     signed: "bg-blue-50 text-blue-700",
     active: "bg-emerald-50 text-emerald-700",
@@ -272,6 +308,8 @@ export default function ClientDetail() {
   const stageDots = {
     discovery: "bg-orange-500",
     contacted: "bg-violet-500",
+    qualified: "bg-emerald-500",
+    meeting_booked: "bg-cyan-500",
     follow_up: "bg-purple-500",
     signed: "bg-blue-500",
     active: "bg-emerald-500",
@@ -286,23 +324,23 @@ export default function ClientDetail() {
   if (loading) {
     return (
       <div className="py-20 text-center text-sm text-gray-400">
-        Loading client...
+        Loading lead...
       </div>
     )
   }
 
-  if (!client) {
+  if (!lead) {
     return (
       <div className={`${card} px-5 py-14 text-center`}>
         <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-lg text-gray-400">
           ◉
         </div>
-        <h2 className="text-base font-semibold text-gray-700">Client not found</h2>
+        <h2 className="text-base font-semibold text-gray-700">Lead not found</h2>
         <p className="mb-4 mt-1 text-xs text-gray-400">
-          This client may have been deleted.
+          This lead may have been deleted.
         </p>
-        <Link to="/clients" className={btnDark}>
-          ← Back to Clients
+        <Link to="/leads" className={btnDark}>
+          ← Back to Leads
         </Link>
       </div>
     )
@@ -326,53 +364,51 @@ export default function ClientDetail() {
           <div className="mb-2 text-xs text-gray-400">
             <Link to="/" className="no-underline hover:text-gray-900">CRM</Link>
             <span className="mx-1.5 text-gray-300">/</span>
-            <Link to="/clients" className="no-underline hover:text-gray-900">Clients</Link>
+            <Link to="/leads" className="no-underline hover:text-gray-900">Leads</Link>
             <span className="mx-1.5 text-gray-300">/</span>
-            {client.name}
+            {lead.name}
           </div>
 
           <h1 className="text-[22px] font-bold tracking-tight min-[481px]:text-[28px]">
-            {client.name}
+            {lead.name}
           </h1>
 
           <p className="mt-1.5 text-sm text-gray-500">
-            {[client.company, client.service_name].filter(Boolean).join(" · ") || "No company or service"}
+            {[lead.company, lead.service_name].filter(Boolean).join(" · ") || "No company or service"}
           </p>
         </div>
 
-        <Link to="/clients" className={`${btnLight} h-10 px-4 text-sm`}>
-          ← Back to Clients
+        <Link to="/leads" className={`${btnLight} h-10 px-4 text-sm`}>
+          ← Back to Leads
         </Link>
       </div>
 
       {/* PROFILE CARD */}
       <div className={`${card} mb-[18px] flex flex-wrap items-center gap-5 p-5`}>
         <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[28px] font-bold text-indigo-600">
-          {(client.name || "?").charAt(0).toUpperCase()}
+          {(lead.name || "?").charAt(0).toUpperCase()}
         </div>
 
         <div className="min-w-[220px] flex-1">
-          <h2 className="text-lg font-bold">{client.name}</h2>
+          <h2 className="text-lg font-bold">{lead.name}</h2>
 
           <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-gray-500">
-            {client.email && <a
-              href={`mailto:${client.email}`}
+            {lead.email && <a
+              href={`mailto:${lead.email}`}
               className="no-underline hover:text-gray-900 hover:underline"
             >
-              ✉ {client.email}
+              ✉ {lead.email}
             </a>}
 
-            {client.phone && <span>☎ {client.phone}</span>}
+            {lead.phone && <span>☎ {lead.phone}</span>}
 
             <span
               className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
-                stageStyles[client.stage] || "bg-gray-100 text-gray-500"
+                stageStyles[lead.stage] || "bg-gray-100 text-gray-500"
               }`}
             >
-              <i className={`h-1.5 w-1.5 rounded-full ${stageDots[client.stage] || "bg-gray-400"}`}></i>
-              {client.stage
-                ? client.stage.charAt(0).toUpperCase() + client.stage.slice(1)
-                : "Unknown"}
+              <i className={`h-1.5 w-1.5 rounded-full ${stageDots[lead.stage] || "bg-gray-400"}`}></i>
+              {stageLabels[lead.stage] || "Unknown"}
             </span>
           </div>
         </div>
@@ -382,12 +418,12 @@ export default function ClientDetail() {
             <label className={label}>Stage</label>
             <select
               className={`${input} cursor-pointer`}
-              value={client.stage || ""}
+              value={lead.stage || ""}
               onChange={(e) => updateStage(e.target.value)}
             >
               {stages.map((stage) => (
                 <option key={stage} value={stage}>
-                  {stage.charAt(0).toUpperCase() + stage.slice(1)}
+                {stageLabels[stage] || stage}
                 </option>
               ))}
             </select>
@@ -397,7 +433,7 @@ export default function ClientDetail() {
             <label className={label}>Assigned To</label>
             <select
               className={`${input} cursor-pointer`}
-              value={client.assigned_to || ""}
+              value={lead.assigned_to || ""}
               onChange={(e) => updateAssignee(e.target.value)}
             >
               <option value="">Unassigned</option>
@@ -410,6 +446,17 @@ export default function ClientDetail() {
           </div>
         </div>
       </div>
+
+      <section className={`${card} mb-[18px] p-5`}>
+        <div className="mb-4"><h2 className="text-base font-bold">Marketing attribution & sale value</h2><p className="mt-1 text-xs text-gray-500">Campaign fields are captured from the landing page. Add the confirmed sale amount to make revenue and ROAS useful.</p></div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[["Lead source", lead.lead_source], ["Campaign", lead.utm_campaign], ["UTM source", lead.utm_source], ["UTM medium", lead.utm_medium]].map(([labelText, value]) => <div key={labelText}><p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{labelText}</p><p className="mt-1 break-words text-sm font-medium text-gray-700">{value || "—"}</p></div>)}
+        </div>
+        <form onSubmit={updateRevenue} className="mt-5 flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
+          <label className="w-full max-w-xs text-xs font-semibold text-gray-600">Confirmed sale amount (INR)<input className={`${input} mt-1.5`} type="number" min="0" step="0.01" value={revenueAmount} onChange={(event) => setRevenueAmount(event.target.value)} placeholder="Leave blank until sale" /></label>
+          <button disabled={savingRevenue} className={btnLight}>{savingRevenue ? "Saving…" : "Save sale amount"}</button>
+        </form>
+      </section>
 
       {/* CONVERSATION AND FOLLOW-UP */}
       <section className={`${card} mb-[18px] overflow-hidden`}>
@@ -430,7 +477,7 @@ export default function ClientDetail() {
           </label>
           <label className={`${label} md:col-span-2`}>
             Discussion
-            <textarea className={`${input} mt-1.5 h-10 min-h-10 py-2`} value={conversationText} onChange={(event) => setConversationText(event.target.value)} placeholder="What did you discuss with the client?" required maxLength={3000} />
+            <textarea className={`${input} mt-1.5 h-10 min-h-10 py-2`} value={conversationText} onChange={(event) => setConversationText(event.target.value)} placeholder="What did you discuss with the lead?" required maxLength={3000} />
           </label>
           <label className={`${label} md:col-span-2`}>
             Outcome / follow-up note
@@ -440,7 +487,7 @@ export default function ClientDetail() {
             {savingConversation ? "Saving..." : "Save conversation"}
           </button>
         </form>
-        {client.next_follow_up && <p className="border-t border-gray-100 px-5 py-3 text-xs text-violet-700">Next follow-up: {formatDate(client.next_follow_up)}</p>}
+        {lead.next_follow_up && <p className="border-t border-gray-100 px-5 py-3 text-xs text-violet-700">Next follow-up: {formatDate(lead.next_follow_up)}</p>}
       </section>
 
       {/* STAT CARDS */}
@@ -448,7 +495,7 @@ export default function ClientDetail() {
         {statCards.map((item) => (
           <div key={item.label} className={`${card} flex min-h-[88px] items-center gap-3.5 p-4`}>
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
-              <Icon name={item.label === "Pending Tasks" ? "tasks" : item.label === "Notes" ? "clients" : item.label === "Activities" ? "pipeline" : "team"} size={18} />
+              <Icon name={item.label === "Pending Tasks" ? "tasks" : item.label === "Notes" ? "leads" : item.label === "Activities" ? "pipeline" : "team"} size={18} />
             </div>
 
             <div className="min-w-0">
@@ -558,7 +605,7 @@ export default function ClientDetail() {
           >
             <textarea
               className={`${input} h-auto min-h-[90px] resize-y py-2.5`}
-              placeholder="Write a note about this client..."
+              placeholder="Write a note about this lead..."
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
             />

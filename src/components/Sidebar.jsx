@@ -4,8 +4,9 @@ import Icon from "./Icon";
 const menuItems = [
   { name: "Dashboard", path: "/", icon: "dashboard", adminOnly: true },
   { name: "My Dashboard", path: "/my-dashboard", icon: "dashboard", memberOnly: true },
-  { name: "Clients", path: "/clients", icon: "clients", adminOnly: true },
+  { name: "Leads", path: "/leads", icon: "leads", adminOnly: true },
   { name: "Pipeline", path: "/pipeline", icon: "pipeline", adminOnly: true },
+  { name: "Marketing", path: "/marketing", icon: "marketing", adminOnly: true },
   { name: "Tasks", path: "/tasks", icon: "tasks", adminOnly: true },
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];

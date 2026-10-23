@@ -186,7 +186,7 @@ table {
 @layer components {
 /* =========================================================
    SHARED PAGE KIT  (used by Pipeline, Tasks, Team pages and
-   Client detail so they look the same as the rest of the app)
+   Lead detail so they look the same as the rest of the app)
    ========================================================= */
 .pg { max-width: 1400px; margin: 0 auto; }
 
@@ -286,45 +286,45 @@ textarea.input { height: auto; padding: 10px 12px; resize: vertical; min-height:
 }
 }
 
-/* Clients workspace palette and type scale, aligned with the login screen. */
-.clients-page { color: #29233a; font-size: 13px; }
-.clients-page p, .clients-page label, .clients-page input, .clients-page select,
-.clients-page button, .clients-page th, .clients-page td { font-size: 12px; }
-.clients-page .clients-heading { margin-bottom: 22px; }
-.clients-page .clients-heading h1 { color: #211833; font-size: 26px; line-height: 1.2; letter-spacing: -.04em; }
-.clients-page .clients-heading p { margin-top: 7px; color: #777487; font-size: 13px; }
-.clients-page .clients-card { border-color: #e9e5f0; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px rgba(43, 25, 77, .045); }
-.clients-page .clients-stat { min-height: 92px; transition: transform .18s, box-shadow .18s; }
-.clients-page .clients-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(49, 16, 120, .09); }
-.clients-page .clients-stat > div:first-child { border: 1px solid #eee7f8; background: linear-gradient(145deg, #f5efff, #eee5fb); color: #5b279d; }
-.clients-page .clients-stat span { color: #777487; font-size: 12px; }
-.clients-page .clients-stat strong { color: #211833; font-size: 22px; line-height: 1; }
-.clients-page h2 { color: #29233a; font-size: 15px; letter-spacing: -.015em; }
-.clients-page h3 { font-size: 13px; }
-.clients-page label { color: #514a60; font-size: 11px; font-weight: 600; }
-.clients-page input, .clients-page select { color: #3f394d; }
-.clients-page input:focus, .clients-page select:focus { outline: none; border-color: #8b52d5; box-shadow: 0 0 0 3px rgba(124, 58, 194, .1); }
-.clients-page .clients-primary { background: linear-gradient(110deg, #321073, #5420a0); box-shadow: 0 4px 10px rgba(53, 17, 110, .16); }
-.clients-page .clients-primary:hover { background: linear-gradient(110deg, #42149b, #6331ad); }
-.clients-page .clients-table-card { border-radius: 16px; }
-.clients-page .clients-table-card > div:first-child { background: linear-gradient(180deg, #fff, #fdfcff); }
-.clients-page .clients-table-head { background: #f8f5fc; }
-.clients-page .clients-table-head th { color: #786a8d; font-size: 10px; font-weight: 700; letter-spacing: .09em; }
-.clients-page .clients-table-card tbody td { border-color: #f0edf4; color: #595365; font-size: 12px; }
-.clients-page .clients-table-card tbody tr { transition: background-color .15s; }
-.clients-page .clients-table-card tbody tr:hover { background: #fbf9fe; }
-.clients-page .clients-name-link strong { color: #282139; font-size: 12px; }
-.clients-page .clients-name-link span { color: #948ea0; font-size: 10px; }
-.clients-page .clients-avatar { background: linear-gradient(145deg, #f2eaff, #e9dcfb); color: #5a279b; }
-.clients-page .clients-table-card td a[href^="mailto:"] { color: #665d75; font-size: 12px; }
-.clients-page .clients-table-card td a[href^="mailto:"]:hover { color: #5420a0; }
-.clients-page .clients-table-card button:not(.clients-primary), .clients-page .clients-table-card select { border-color: #e7e2ed; border-radius: 8px; }
-.clients-page .clients-table-card button:not(.clients-primary):hover { border-color: #d6c4ed; background: #f8f4fd; }
-.clients-page .clients-table-card button[aria-label] { color: #5c279e; }
+/* Leads workspace palette and type scale, aligned with the login screen. */
+.leads-page { color: #29233a; font-size: 13px; }
+.leads-page p, .leads-page label, .leads-page input, .leads-page select,
+.leads-page button, .leads-page th, .leads-page td { font-size: 12px; }
+.leads-page .leads-heading { margin-bottom: 22px; }
+.leads-page .leads-heading h1 { color: #211833; font-size: 26px; line-height: 1.2; letter-spacing: -.04em; }
+.leads-page .leads-heading p { margin-top: 7px; color: #777487; font-size: 13px; }
+.leads-page .leads-card { border-color: #e9e5f0; border-radius: 16px; background: #fff; box-shadow: 0 5px 18px rgba(43, 25, 77, .045); }
+.leads-page .leads-stat { min-height: 92px; transition: transform .18s, box-shadow .18s; }
+.leads-page .leads-stat:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(49, 16, 120, .09); }
+.leads-page .leads-stat > div:first-child { border: 1px solid #eee7f8; background: linear-gradient(145deg, #f5efff, #eee5fb); color: #5b279d; }
+.leads-page .leads-stat span { color: #777487; font-size: 12px; }
+.leads-page .leads-stat strong { color: #211833; font-size: 22px; line-height: 1; }
+.leads-page h2 { color: #29233a; font-size: 15px; letter-spacing: -.015em; }
+.leads-page h3 { font-size: 13px; }
+.leads-page label { color: #514a60; font-size: 11px; font-weight: 600; }
+.leads-page input, .leads-page select { color: #3f394d; }
+.leads-page input:focus, .leads-page select:focus { outline: none; border-color: #8b52d5; box-shadow: 0 0 0 3px rgba(124, 58, 194, .1); }
+.leads-page .leads-primary { background: linear-gradient(110deg, #321073, #5420a0); box-shadow: 0 4px 10px rgba(53, 17, 110, .16); }
+.leads-page .leads-primary:hover { background: linear-gradient(110deg, #42149b, #6331ad); }
+.leads-page .leads-table-card { border-radius: 16px; }
+.leads-page .leads-table-card > div:first-child { background: linear-gradient(180deg, #fff, #fdfcff); }
+.leads-page .leads-table-head { background: #f8f5fc; }
+.leads-page .leads-table-head th { color: #786a8d; font-size: 10px; font-weight: 700; letter-spacing: .09em; }
+.leads-page .leads-table-card tbody td { border-color: #f0edf4; color: #595365; font-size: 12px; }
+.leads-page .leads-table-card tbody tr { transition: background-color .15s; }
+.leads-page .leads-table-card tbody tr:hover { background: #fbf9fe; }
+.leads-page .leads-name-link strong { color: #282139; font-size: 12px; }
+.leads-page .leads-name-link span { color: #948ea0; font-size: 10px; }
+.leads-page .leads-avatar { background: linear-gradient(145deg, #f2eaff, #e9dcfb); color: #5a279b; }
+.leads-page .leads-table-card td a[href^="mailto:"] { color: #665d75; font-size: 12px; }
+.leads-page .leads-table-card td a[href^="mailto:"]:hover { color: #5420a0; }
+.leads-page .leads-table-card button:not(.leads-primary), .leads-page .leads-table-card select { border-color: #e7e2ed; border-radius: 8px; }
+.leads-page .leads-table-card button:not(.leads-primary):hover { border-color: #d6c4ed; background: #f8f4fd; }
+.leads-page .leads-table-card button[aria-label] { color: #5c279e; }
 @media (max-width: 768px) {
-  .clients-page .clients-heading h1 { font-size: 23px; }
-  .clients-page .clients-card { border-radius: 13px; }
-  .clients-page .clients-stat { min-height: 78px; }
+  .leads-page .leads-heading h1 { font-size: 23px; }
+  .leads-page .leads-card { border-radius: 13px; }
+  .leads-page .leads-stat { min-height: 78px; }
 }
 
 /* Shared CRM visual system: consistent violet brand, surfaces, and icon controls. */

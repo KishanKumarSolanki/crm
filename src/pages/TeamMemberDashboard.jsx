@@ -128,13 +128,13 @@ function DashboardSkeleton() {
 
 export default function TeamMemberDashboard() {
   const [member, setMember] = useState(null);
-  const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [updatingTask, setUpdatingTask] = useState(null);
   const [taskTab, setTaskTab] = useState("open");
-  const [clientSearch, setClientSearch] = useState("");
+  const [leadSearch, setLeadSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
 
   const loadDashboard = useCallback(async () => {
@@ -165,13 +165,13 @@ export default function TeamMemberDashboard() {
     }
     setMember(memberRecord);
 
-    const [clientsResult, tasksResult] = await Promise.all([
+    const [leadsResult, tasksResult] = await Promise.all([
       supabase.from("clients").select("*").eq("assigned_to", memberRecord.id).order("created_at", { ascending: false }),
       supabase.from("tasks").select("*").eq("assigned_to", memberRecord.id).order("due_date", { ascending: true }),
     ]);
-    const loadErrors = [clientsResult.error, tasksResult.error].filter(Boolean);
+    const loadErrors = [leadsResult.error, tasksResult.error].filter(Boolean);
     if (loadErrors.length) setError(loadErrors.map((item) => item.message).join(" "));
-    setClients(clientsResult.data || []);
+    setLeads(leadsResult.data || []);
     setTasks(tasksResult.data || []);
     setLoading(false);
   }, []);
@@ -199,28 +199,28 @@ export default function TeamMemberDashboard() {
     setUpdatingTask(null);
   };
 
-  const exportClients = () => {
-    const columns = ["Client Name", "Phone", "Email", "Company", "Service", "Lead Source", "Pipeline Stage", "Next Follow-up"];
+  const exportLeads = () => {
+    const columns = ["Lead Name", "Phone", "Email", "Company", "Service", "Lead Source", "Pipeline Stage", "Next Follow-up"];
     const csvCell = (value) => {
       const raw = String(value ?? "");
       const safe = /^[\s]*[=+@-]/.test(raw) ? `'${raw}` : raw;
       return `"${safe.replaceAll('"', '""')}"`;
     };
-    const rows = clients.map((client) => [
-      client.name,
-      client.phone,
-      client.email,
-      client.company,
-      client.service_name,
-      client.lead_source,
-      stageLabel(client.stage),
-      client.next_follow_up ? new Date(client.next_follow_up).toLocaleString() : "",
+    const rows = leads.map((lead) => [
+      lead.name,
+      lead.phone,
+      lead.email,
+      lead.company,
+      lead.service_name,
+      lead.lead_source,
+      stageLabel(lead.stage),
+      lead.next_follow_up ? new Date(lead.next_follow_up).toLocaleString() : "",
     ]);
     const csv = [columns, ...rows].map((row) => row.map(csvCell).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `my-clients-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.download = `my-leads-${new Date().toISOString().slice(0, 10)}.csv`;
     anchor.click();
     URL.revokeObjectURL(url);
   };
@@ -238,11 +238,11 @@ export default function TeamMemberDashboard() {
   const overdueTasks = pendingTasks.filter((task) => task.due_date && new Date(task.due_date) < startOfToday);
   const completionPercent = tasks.length ? Math.round((completedTasks.length / tasks.length) * 100) : 0;
 
-  const followUpClients = clients
-    .filter((client) => client.stage === "follow_up" || (client.next_follow_up && new Date(client.next_follow_up) <= endOfToday))
+  const followUpLeads = leads
+    .filter((lead) => lead.stage === "follow_up" || (lead.next_follow_up && new Date(lead.next_follow_up) <= endOfToday))
     .sort((a, b) => new Date(a.next_follow_up || "9999-12-31") - new Date(b.next_follow_up || "9999-12-31"));
 
-  const clientById = useMemo(() => new Map(clients.map((client) => [String(client.id), client])), [clients]);
+  const leadById = useMemo(() => new Map(leads.map((lead) => [String(lead.id), lead])), [leads]);
 
   const taskCounts = {
     open: pendingTasks.length,
@@ -258,23 +258,23 @@ export default function TeamMemberDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskTab, tasks]);
 
-  const visibleClients = useMemo(() => {
-    const query = clientSearch.trim().toLowerCase();
-    return clients.filter((client) => {
-      const matchesStage = stageFilter === "all" || client.stage === stageFilter;
+  const visibleLeads = useMemo(() => {
+    const query = leadSearch.trim().toLowerCase();
+    return leads.filter((lead) => {
+      const matchesStage = stageFilter === "all" || lead.stage === stageFilter;
       const matchesQuery =
         !query ||
-        [client.name, client.company, client.email, client.phone, client.service_name]
+        [lead.name, lead.company, lead.email, lead.phone, lead.service_name]
           .filter(Boolean)
           .some((field) => String(field).toLowerCase().includes(query));
       return matchesStage && matchesQuery;
     });
-  }, [clients, clientSearch, stageFilter]);
+  }, [leads, leadSearch, stageFilter]);
 
   if (loading) return <DashboardSkeleton />;
 
   const stats = [
-    { label: "Assigned clients", value: clients.length, icon: "clients", note: "In your portfolio", tone: "from-violet-500 to-indigo-500" },
+    { label: "Assigned leads", value: leads.length, icon: "leads", note: "In your portfolio", tone: "from-violet-500 to-indigo-500" },
     {
       label: "Open tasks",
       value: pendingTasks.length,
@@ -284,7 +284,7 @@ export default function TeamMemberDashboard() {
       tone: "from-sky-500 to-cyan-500",
     },
     { label: "Due today", value: dueToday.length, icon: "pipeline", note: "Tasks to finish today", tone: "from-amber-500 to-orange-500" },
-    { label: "Follow-ups", value: followUpClients.length, icon: "bell", note: "Clients needing a touchpoint", tone: "from-fuchsia-500 to-rose-500" },
+    { label: "Follow-ups", value: followUpLeads.length, icon: "bell", note: "Leads needing a touchpoint", tone: "from-fuchsia-500 to-rose-500" },
   ];
 
   return (
@@ -307,10 +307,10 @@ export default function TeamMemberDashboard() {
             </h1>
             <p className="mt-2 max-w-lg text-sm leading-6 text-violet-100/80">
               {overdueTasks.length
-                ? `You have ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""} and ${followUpClients.length} follow-up${followUpClients.length === 1 ? "" : "s"} waiting.`
+                ? `You have ${overdueTasks.length} overdue task${overdueTasks.length > 1 ? "s" : ""} and ${followUpLeads.length} follow-up${followUpLeads.length === 1 ? "" : "s"} waiting.`
                 : dueToday.length
                 ? `${dueToday.length} task${dueToday.length > 1 ? "s" : ""} due today. Let's get them done.`
-                : "Your client relationships, follow-ups, and priorities in one focused workspace."}
+                : "Your lead relationships, follow-ups, and priorities in one focused workspace."}
             </p>
             <div className="mt-5 flex flex-wrap items-center gap-2 text-xs text-violet-100/80">
               <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1.5">{member?.designation || "Team member"}</span>
@@ -327,8 +327,8 @@ export default function TeamMemberDashboard() {
             </button>
             <button
               type="button"
-              onClick={exportClients}
-              disabled={clients.length === 0}
+              onClick={exportLeads}
+              disabled={leads.length === 0}
               className="inline-flex h-11 items-center gap-2 rounded-xl bg-white px-4 text-sm font-semibold text-[#321073] shadow-lg shadow-black/20 transition hover:-translate-y-0.5 hover:bg-violet-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Icon name="arrow" size={16} /> Export Excel (.csv)
@@ -366,7 +366,7 @@ export default function TeamMemberDashboard() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        {/* Left: tasks + clients */}
+        {/* Left: tasks + leads */}
         <div className="space-y-6 xl:col-span-2">
           <SectionCard icon="tasks" title="My tasks" subtitle="Priorities assigned to you by your admin">
             <div className="flex gap-1.5 overflow-x-auto border-b border-violet-200/70 bg-[#f3ebfc] px-5 py-3 sm:px-6">
@@ -394,7 +394,7 @@ export default function TeamMemberDashboard() {
             ) : (
               <div className="max-h-[560px] divide-y divide-violet-200/60 overflow-y-auto">
                 {visibleTasks.map((task) => {
-                  const client = clientById.get(String(task.client_id));
+                  const lead = leadById.get(String(task.client_id));
                   const complete = isComplete(task);
                   const overdue = !complete && task.due_date && new Date(task.due_date) < startOfToday;
                   const priority = (task.priority || "normal").toLowerCase();
@@ -414,9 +414,9 @@ export default function TeamMemberDashboard() {
                         <div className="min-w-0">
                           <p className={`text-sm font-semibold ${complete ? "text-slate-500 line-through" : "text-slate-900"}`}>{task.title || "Untitled task"}</p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-slate-500">
-                            {client && (
-                              <Link to={`/client/${client.id}`} className="font-medium text-violet-700 no-underline hover:underline">
-                                {client.name}
+                            {lead && (
+                              <Link to={`/lead/${lead.id}`} className="font-medium text-violet-700 no-underline hover:underline">
+                                {lead.name}
                               </Link>
                             )}
                             <span className={overdue ? "font-semibold text-rose-600" : ""}>{task.due_date ? dateLabel(task.due_date) : "No due date"}</span>
@@ -448,26 +448,26 @@ export default function TeamMemberDashboard() {
           </SectionCard>
 
           <SectionCard
-            icon="clients"
-            title="My assigned clients"
-            subtitle={`${visibleClients.length} of ${clients.length} client${clients.length === 1 ? "" : "s"}`}
+            icon="leads"
+            title="My assigned leads"
+            subtitle={`${visibleLeads.length} of ${leads.length} lead${leads.length === 1 ? "" : "s"}`}
             action={
               <button
                 type="button"
-                onClick={exportClients}
-                disabled={clients.length === 0}
+                onClick={exportLeads}
+                disabled={leads.length === 0}
                 className="rounded-lg border border-violet-300 bg-[#f3eafd] px-3 py-2 text-xs font-semibold text-violet-900 transition hover:bg-violet-100 disabled:opacity-50"
               >
                 Export Excel (.csv)
               </button>
             }
           >
-            {clients.length > 0 && (
+            {leads.length > 0 && (
               <div className="flex flex-wrap gap-3 border-b border-violet-200/70 bg-[#f3ebfc] px-5 py-3 sm:px-6">
                 <input
                   type="search"
-                  value={clientSearch}
-                  onChange={(event) => setClientSearch(event.target.value)}
+                  value={leadSearch}
+                  onChange={(event) => setLeadSearch(event.target.value)}
                   placeholder="Search name, company, phone, email..."
                   className="h-10 min-w-[220px] flex-1 rounded-xl border border-violet-200 bg-white px-3.5 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-violet-400 focus:bg-white focus:ring-4 focus:ring-violet-100"
                 />
@@ -486,16 +486,16 @@ export default function TeamMemberDashboard() {
               </div>
             )}
 
-            {clients.length === 0 ? (
-              <EmptyState icon="clients" title="No clients assigned yet" text="Your admin's client assignments will show up here." />
-            ) : visibleClients.length === 0 ? (
-              <EmptyState icon="clients" title="No matching clients" text="Try a different search or stage filter." />
+            {leads.length === 0 ? (
+              <EmptyState icon="leads" title="No leads assigned yet" text="Your admin's lead assignments will show up here." />
+            ) : visibleLeads.length === 0 ? (
+              <EmptyState icon="leads" title="No matching leads" text="Try a different search or stage filter." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[760px] text-left">
                   <thead className="bg-[#e9ddf6] text-[10px] uppercase tracking-[0.12em] text-violet-950/75">
                     <tr>
-                      {["Client", "Contact", "Service", "Stage", "Next follow-up"].map((heading) => (
+                      {["Lead", "Contact", "Service", "Stage", "Next follow-up"].map((heading) => (
                         <th key={heading} className="px-5 py-3 font-bold">
                           {heading}
                         </th>
@@ -503,30 +503,30 @@ export default function TeamMemberDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-violet-200/60">
-                    {visibleClients.map((client) => (
-                      <tr key={client.id} className="transition hover:bg-violet-100/50">
+                    {visibleLeads.map((lead) => (
+                      <tr key={lead.id} className="transition hover:bg-violet-100/50">
                         <td className="px-5 py-3.5">
                           <div className="flex items-center gap-3">
                             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-100 to-fuchsia-100 text-sm font-bold text-violet-800">
-                              {client.name?.trim()?.charAt(0)?.toUpperCase() || "C"}
+                              {lead.name?.trim()?.charAt(0)?.toUpperCase() || "C"}
                             </span>
                             <div className="min-w-0">
-                              <Link to={`/client/${client.id}`} className="block truncate text-sm font-semibold text-slate-900 no-underline hover:text-violet-700">
-                                {client.name}
+                              <Link to={`/lead/${lead.id}`} className="block truncate text-sm font-semibold text-slate-900 no-underline hover:text-violet-700">
+                                {lead.name}
                               </Link>
-                              <span className="block truncate text-xs text-slate-500">{client.company || "Individual client"}</span>
+                              <span className="block truncate text-xs text-slate-500">{lead.company || "Individual lead"}</span>
                             </div>
                           </div>
                         </td>
-                        <td className="px-5 py-3.5 text-xs text-slate-700">{client.phone || client.email || "—"}</td>
-                        <td className="px-5 py-3.5 text-xs text-slate-700">{client.service_name || "—"}</td>
+                        <td className="px-5 py-3.5 text-xs text-slate-700">{lead.phone || lead.email || "—"}</td>
+                        <td className="px-5 py-3.5 text-xs text-slate-700">{lead.service_name || "—"}</td>
                         <td className="px-5 py-3.5">
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${STAGE_STYLES[client.stage] || "bg-slate-50 text-slate-600 ring-slate-200"}`}>
-                            {stageLabel(client.stage)}
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ring-inset ${STAGE_STYLES[lead.stage] || "bg-slate-50 text-slate-600 ring-slate-200"}`}>
+                            {stageLabel(lead.stage)}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-xs text-slate-700">
-                          {client.next_follow_up ? dateLabel(client.next_follow_up) : <span className="text-slate-400">Not scheduled</span>}
+                          {lead.next_follow_up ? dateLabel(lead.next_follow_up) : <span className="text-slate-400">Not scheduled</span>}
                         </td>
                       </tr>
                     ))}
@@ -555,27 +555,27 @@ export default function TeamMemberDashboard() {
           <SectionCard
             icon="bell"
             title="Follow-up queue"
-            subtitle="Your next client touchpoints"
-            action={<span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 ring-1 ring-violet-100">{followUpClients.length} to follow up</span>}
+            subtitle="Your next lead touchpoints"
+            action={<span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 ring-1 ring-violet-100">{followUpLeads.length} to follow up</span>}
           >
-            {followUpClients.length === 0 ? (
-              <EmptyState icon="bell" title="You're all caught up" text="Scheduled client follow-ups will appear here." />
+            {followUpLeads.length === 0 ? (
+              <EmptyState icon="bell" title="You're all caught up" text="Scheduled lead follow-ups will appear here." />
             ) : (
               <div className="max-h-[420px] space-y-2.5 overflow-y-auto p-4">
-                {followUpClients.slice(0, 8).map((client) => {
-                  const date = client.next_follow_up ? new Date(client.next_follow_up) : null;
+                {followUpLeads.slice(0, 8).map((lead) => {
+                  const date = lead.next_follow_up ? new Date(lead.next_follow_up) : null;
                   const isOverdue = date && date < new Date();
                   return (
                     <Link
-                      key={client.id}
-                      to={`/client/${client.id}`}
+                      key={lead.id}
+                      to={`/lead/${lead.id}`}
                       className="group flex min-w-0 items-center gap-3 rounded-2xl border border-violet-200/70 bg-[#fbf8ff] p-3.5 no-underline transition hover:border-violet-300 hover:bg-violet-50/50 hover:shadow-sm"
                     >
                       <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-100 to-fuchsia-100 text-sm font-bold text-violet-800">
-                        {client.name?.trim()?.charAt(0)?.toUpperCase() || "C"}
+                        {lead.name?.trim()?.charAt(0)?.toUpperCase() || "C"}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-violet-800">{client.name}</span>
+                        <span className="block truncate text-sm font-semibold text-slate-800 group-hover:text-violet-800">{lead.name}</span>
                         <span className={`mt-0.5 block text-xs ${isOverdue ? "font-semibold text-rose-600" : "text-slate-500"}`}>
                           {date ? `${isOverdue ? "Overdue · " : "Due · "}${dateLabel(date)}` : "Follow-up stage"}
                         </span>

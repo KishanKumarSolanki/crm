@@ -12,14 +12,14 @@ const dateInputValue = (value) => {
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
-  const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
-  const [clientId, setClientId] = useState("");
+  const [leadId, setLeadId] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState("normal");
@@ -43,21 +43,21 @@ export default function Tasks() {
         .order("name", { ascending: true }),
     ]), []);
 
-  const applyTaskRecords = useCallback(([tasksResult, clientsResult, membersResult]) => {
+  const applyTaskRecords = useCallback(([tasksResult, leadsResult, membersResult]) => {
     if (tasksResult.error) {
       setError(`Could not load tasks: ${tasksResult.error.message}`);
     } else {
       setTasks(tasksResult.data || []);
     }
 
-    if (clientsResult.error) {
+    if (leadsResult.error) {
       setError((current) =>
-        [current, `Could not load clients: ${clientsResult.error.message}`]
+        [current, `Could not load leads: ${leadsResult.error.message}`]
           .filter(Boolean)
           .join(" ")
       );
     } else {
-      setClients(clientsResult.data || []);
+      setLeads(leadsResult.data || []);
     }
 
     if (membersResult.error) {
@@ -99,7 +99,7 @@ export default function Tasks() {
   const resetForm = () => {
     setEditingId(null);
     setTitle("");
-    setClientId("");
+    setLeadId("");
     setDueDate("");
     setAssignedTo("");
     setPriority("normal");
@@ -108,8 +108,8 @@ export default function Tasks() {
 
   const saveTask = async (event) => {
     event.preventDefault();
-    if (!title.trim() || !clientId) {
-      setError("Task title and client are required.");
+    if (!title.trim() || !leadId) {
+      setError("Task title and lead are required.");
       return;
     }
 
@@ -117,7 +117,7 @@ export default function Tasks() {
     setError("");
     const values = {
       title: title.trim(),
-      client_id: clientId,
+      client_id: leadId,
       due_date: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
       assigned_to: assignedTo || null,
       priority,
@@ -135,7 +135,7 @@ export default function Tasks() {
     }
 
     const { error: activityError } = await supabase.from("activities").insert({
-      client_id: clientId,
+      client_id: leadId,
       type: editingId ? "task_updated" : "task_assigned",
       description: `${editingId ? "Updated" : "Assigned"} task: ${title.trim()}${assignedTo ? ` (${teamMembers.find((member) => String(member.id) === assignedTo)?.name || "team member"})` : ""}`,
     });
@@ -149,7 +149,7 @@ export default function Tasks() {
   const beginEdit = (task) => {
     setEditingId(task.id);
     setTitle(task.title || "");
-    setClientId(task.client_id ? String(task.client_id) : "");
+    setLeadId(task.client_id ? String(task.client_id) : "");
     setDueDate(dateInputValue(task.due_date));
     setAssignedTo(task.assigned_to ? String(task.assigned_to) : "");
     setPriority(task.priority || "normal");
@@ -214,7 +214,7 @@ export default function Tasks() {
   );
   const completedCount = tasks.filter((task) => task.status?.toLowerCase() === "completed").length;
   const pendingCount = tasks.length - completedCount;
-  const clientById = new Map(clients.map((client) => [String(client.id), client]));
+  const leadById = new Map(leads.map((lead) => [String(lead.id), lead]));
   const memberById = new Map(teamMembers.map((member) => [String(member.id), member]));
 
   const formatDate = (value) => {
@@ -233,7 +233,7 @@ export default function Tasks() {
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">CRM Management</p>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tasks & Follow-ups</h1>
-          <p className="mt-2 text-sm text-slate-500">Assign follow-ups to clients and team members, set priorities, and track completion.</p>
+          <p className="mt-2 text-sm text-slate-500">Assign follow-ups to leads and team members, set priorities, and track completion.</p>
         </div>
         <button
           type="button"
@@ -272,15 +272,15 @@ export default function Tasks() {
               onChange={(event) => setTitle(event.target.value)}
               maxLength={200}
               required
-              placeholder="e.g. Call client"
+              placeholder="e.g. Call lead"
             />
           </label>
           <label className="text-xs font-semibold text-slate-600">
-            Client
-            <select className={`${inputClass} mt-1.5`} value={clientId} onChange={(event) => setClientId(event.target.value)} required>
-              <option value="">Select a client</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>{client.name}{client.company ? ` · ${client.company}` : ""}</option>
+            Lead
+            <select className={`${inputClass} mt-1.5`} value={leadId} onChange={(event) => setLeadId(event.target.value)} required>
+              <option value="">Select a lead</option>
+              {leads.map((lead) => (
+                <option key={lead.id} value={lead.id}>{lead.name}{lead.company ? ` · ${lead.company}` : ""}</option>
               ))}
             </select>
           </label>
@@ -311,7 +311,7 @@ export default function Tasks() {
           </label>
           <button
             type="submit"
-            disabled={saving || clients.length === 0}
+            disabled={saving || leads.length === 0}
             className="self-end rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {saving ? "Saving..." : editingId ? "Save Changes" : "Add Task"}
@@ -322,7 +322,7 @@ export default function Tasks() {
             </button>
           )}
         </div>
-        {clients.length === 0 && !loading && <p className="mt-3 text-xs text-amber-700">Add a client before creating a task.</p>}
+        {leads.length === 0 && !loading && <p className="mt-3 text-xs text-amber-700">Add a lead before creating a task.</p>}
       </form>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -351,7 +351,7 @@ export default function Tasks() {
         ) : (
           <div className="divide-y divide-slate-100">
             {visibleTasks.map((task) => {
-              const linkedClient = clientById.get(String(task.client_id));
+              const linkedLead = leadById.get(String(task.client_id));
               const completed = task.status?.toLowerCase() === "completed";
               const overdue = !completed && task.due_date && new Date(task.due_date) < new Date();
               return (
@@ -361,7 +361,7 @@ export default function Tasks() {
                       {task.title || "Untitled Task"}
                     </h3>
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                      {linkedClient ? <Link to={`/client/${linkedClient.id}`} className="text-indigo-600 hover:underline">{linkedClient.name}</Link> : <span>Client unavailable</span>}
+                      {linkedLead ? <Link to={`/lead/${linkedLead.id}`} className="text-indigo-600 hover:underline">{linkedLead.name}</Link> : <span>Lead unavailable</span>}
                       <span>{memberById.get(String(task.assigned_to))?.name || "Unassigned"}</span>
                       <span className={overdue ? "font-semibold text-red-600" : ""}>{overdue ? "Overdue · " : "Due · "}{formatDate(task.due_date)}</span>
                     </div>

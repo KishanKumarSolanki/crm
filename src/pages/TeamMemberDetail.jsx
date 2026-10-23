@@ -7,7 +7,7 @@ export default function TeamMemberDetail() {
   const { id } = useParams();
 
   const [member, setMember] = useState(null);
-  const [clients, setClients] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,23 +32,23 @@ export default function TeamMemberDetail() {
 
       setMember(memberData);
 
-      const { data: clientData, error: clientError } =
+      const { data: leadData, error: leadError } =
         await supabase
           .from("clients")
           .select("*")
           .eq("assigned_to", id)
           .order("created_at", { ascending: false });
 
-      if (clientError) {
-        console.error("Clients error:", clientError);
+      if (leadError) {
+        console.error("Leads error:", leadError);
       }
 
-      const clientList = clientData || [];
-      setClients(clientList);
+      const leadList = leadData || [];
+      setLeads(leadList);
 
-      const clientIds = clientList.map((client) => client.id);
+      const leadIds = leadList.map((lead) => lead.id);
 
-      if (clientIds.length === 0) {
+      if (leadIds.length === 0) {
         setTasks([]);
         setActivities([]);
         return;
@@ -58,7 +58,7 @@ export default function TeamMemberDetail() {
         await supabase
           .from("tasks")
           .select("*")
-          .in("client_id", clientIds)
+          .in("client_id", leadIds)
           .order("due_date", { ascending: true });
 
       if (taskError) {
@@ -71,7 +71,7 @@ export default function TeamMemberDetail() {
         await supabase
           .from("activities")
           .select("*")
-          .in("client_id", clientIds)
+          .in("client_id", leadIds)
           .order("created_at", { ascending: false });
 
       if (activityError) {
@@ -242,7 +242,7 @@ export default function TeamMemberDetail() {
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:shadow-md">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium text-slate-500">
-              Assigned Clients
+              Assigned Leads
             </p>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <svg
@@ -262,11 +262,11 @@ export default function TeamMemberDetail() {
           </div>
 
           <h2 className="mt-4 text-3xl font-bold text-slate-900">
-            {clients.length}
+            {leads.length}
           </h2>
 
           <p className="mt-1 text-xs text-slate-400">
-            Clients assigned to this member
+            Leads assigned to this member
           </p>
         </div>
 
@@ -335,25 +335,25 @@ export default function TeamMemberDetail() {
 
       </div>
 
-      {/* Assigned Clients */}
+      {/* Assigned Leads */}
       <section className="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
         <div className="border-b border-slate-100 px-5 py-5 sm:px-6">
           <h2 className="text-lg font-bold text-slate-900">
-            Assigned Clients
+            Assigned Leads
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Clients managed by this team member.
+            Leads managed by this team member.
           </p>
         </div>
 
-        {clients.length === 0 ? (
+        {leads.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-sm font-medium text-slate-600">
-              No clients assigned.
+              No leads assigned.
             </p>
             <p className="mt-1 text-xs text-slate-400">
-              Assigned clients will appear here.
+              Assigned leads will appear here.
             </p>
           </div>
         ) : (
@@ -377,36 +377,36 @@ export default function TeamMemberDetail() {
               </thead>
 
               <tbody className="divide-y divide-slate-100">
-                {clients.map((client) => (
+                {leads.map((lead) => (
                   <tr
-                    key={client.id}
+                    key={lead.id}
                     className="transition hover:bg-slate-50"
                   >
                     <td className="px-5 py-4 sm:px-6">
                       <Link
-                        to={`/client/${client.id}`}
+                        to={`/lead/${lead.id}`}
                         className="font-semibold text-slate-800 transition hover:text-indigo-600"
                       >
-                        {client.name || "Unnamed Client"}
+                        {lead.name || "Unnamed Lead"}
                       </Link>
                     </td>
 
                     <td className="px-5 py-4 text-sm text-slate-500 sm:px-6">
-                      {client.email || "-"}
+                      {lead.email || "-"}
                     </td>
 
                     <td className="px-5 py-4 text-sm text-slate-500 sm:px-6">
-                      {client.company || "-"}
+                      {lead.company || "-"}
                     </td>
 
                     <td className="px-5 py-4 sm:px-6">
                       <span
                         className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${
-                          stageStyles[client.stage] ||
+                          stageStyles[lead.stage] ||
                           "bg-slate-100 text-slate-600"
                         }`}
                       >
-                        {client.stage || "Unknown"}
+                        {lead.stage || "Unknown"}
                       </span>
                     </td>
                   </tr>
@@ -425,7 +425,7 @@ export default function TeamMemberDetail() {
             Tasks & Follow-ups
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Track tasks associated with assigned clients.
+            Track tasks associated with assigned leads.
           </p>
         </div>
 
@@ -436,9 +436,9 @@ export default function TeamMemberDetail() {
         ) : (
           <div className="divide-y divide-slate-100">
             {tasks.map((task) => {
-              const taskClient = clients.find(
-                (client) =>
-                  String(client.id) === String(task.client_id)
+              const taskLead = leads.find(
+                (lead) =>
+                  String(lead.id) === String(task.client_id)
               );
 
               return (
@@ -452,7 +452,7 @@ export default function TeamMemberDetail() {
                     </h3>
 
                     <p className="mt-2 text-xs text-slate-500">
-                      Client: {taskClient?.name || "Unknown"}
+                      Lead: {taskLead?.name || "Unknown"}
                     </p>
 
                     <p className="mt-1 text-xs text-slate-500">
@@ -482,7 +482,7 @@ export default function TeamMemberDetail() {
             Recent Activities
           </h2>
           <p className="mt-1 text-sm text-slate-500">
-            Recent activity history for assigned clients.
+            Recent activity history for assigned leads.
           </p>
         </div>
 
@@ -493,9 +493,9 @@ export default function TeamMemberDetail() {
         ) : (
           <div className="divide-y divide-slate-100">
             {activities.map((activity) => {
-              const activityClient = clients.find(
-                (client) =>
-                  String(client.id) === String(activity.client_id)
+              const activityLead = leads.find(
+                (lead) =>
+                  String(lead.id) === String(activity.client_id)
               );
 
               return (
@@ -526,7 +526,7 @@ export default function TeamMemberDetail() {
                       </h3>
 
                       <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-500">
-                        {activityClient?.name || "Unknown client"}
+                        {activityLead?.name || "Unknown lead"}
                       </span>
                     </div>
 
