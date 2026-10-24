@@ -328,7 +328,7 @@ export default function Pipeline() {
                             </p>
                           </div>
                         )}
-hello
+
                       </div>
                     </section>
                   )}
