@@ -480,13 +480,6 @@ export default function TeamMemberDashboard() {
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Link
-              to="/daily-report"
-              className="inline-flex h-11 items-center gap-2 rounded-xl bg-emerald-300 px-4 text-sm font-semibold text-emerald-950 no-underline shadow-lg shadow-black/15 transition hover:-translate-y-0.5 hover:bg-emerald-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
-            >
-              <Icon name="tasks" size={16} />
-              Send Daily Report
-            </Link>
             <button
               type="button"
               onClick={loadDashboard}

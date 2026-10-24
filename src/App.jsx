@@ -13,8 +13,6 @@ const TeamMemberDetail = lazy(() => import("./pages/TeamMemberDetail"))
 const TeamMemberDashboard = lazy(() => import("./pages/TeamMemberDashboard"))
 const LandingPage = lazy(() => import("./pages/LandingPage"))
 const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
-const DailyReport = lazy(() => import("./pages/DailyReport"))
-const DailyReports = lazy(() => import("./pages/DailyReports"))
 
 function LegacyLeadDetailRedirect() {
   const { id } = useParams()
@@ -68,8 +66,6 @@ function App() {
 
           <Route path="/my-dashboard" element={<TeamMemberRoute><TeamMemberDashboard /></TeamMemberRoute>} />
           <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
-          <Route path="/daily-report" element={<RoleRoute allowedRoles={["manager", "staff", "team_member"]}><DailyReport /></RoleRoute>} />
-          <Route path="/daily-reports" element={<AdminRoute><DailyReports /></AdminRoute>} />
 
 
           {/* LEADS */}
