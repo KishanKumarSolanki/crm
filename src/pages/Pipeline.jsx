@@ -328,7 +328,7 @@ export default function Pipeline() {
                             </p>
                           </div>
                         )}
-
+hello
                       </div>
                     </section>
                   )}
@@ -338,6 +338,7 @@ export default function Pipeline() {
 
           </div>
         </DragDropContext>
+        
       )}
     </div>
   );
