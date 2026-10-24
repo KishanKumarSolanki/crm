@@ -20,7 +20,7 @@ export default function TeamMemberRoute({ children }) {
         .eq("id", user.id)
         .single();
 
-      if (active) setState(!error && ["staff", "team_member"].includes(profile?.role) ? "member" : profile?.role === "admin" ? "admin" : "unauthorized");
+      if (active) setState(!error && ["staff", "team_member"].includes(profile?.role) ? "member" : profile?.role || "unauthorized");
     };
 
     checkRole().catch(() => { if (active) setState("unauthorized"); });
@@ -29,6 +29,7 @@ export default function TeamMemberRoute({ children }) {
 
   if (state === "loading") return <div className="py-20 text-center text-sm text-slate-500">Checking permissions...</div>;
   if (state === "admin") return <Navigate to="/" replace />;
+  if (state === "manager") return <Navigate to="/manager-dashboard" replace />;
   if (state !== "member") return <Navigate to="/login" replace />;
   return children;
 }

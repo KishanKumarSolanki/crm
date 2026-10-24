@@ -1,11 +1,201 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams, Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import { sendWelcomeEmailWhenContacted } from "../lib/email"
 import Icon from "../components/Icon"
 
-const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "active", "in_revision", "delivered"]
-const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" }
+// =========================
+// CONSTANTS
+// =========================
+
+const stages = [
+  "discovery",
+  "contacted",
+  "qualified",
+  "meeting_booked",
+  "follow_up",
+  "signed",
+  "active",
+  "in_revision",
+  "delivered",
+]
+
+const stageLabels = {
+  discovery: "New Lead",
+  contacted: "Contacted",
+  qualified: "Qualified",
+  meeting_booked: "Meeting Booked",
+  follow_up: "Follow-up",
+  signed: "Closed & Signed",
+  active: "In Progress",
+  in_revision: "In Revision",
+  delivered: "Delivered",
+}
+
+const stageTone = {
+  discovery: { pill: "bg-orange-50 text-orange-700 ring-orange-100", dot: "bg-orange-500" },
+  contacted: { pill: "bg-violet-50 text-violet-700 ring-violet-100", dot: "bg-violet-500" },
+  qualified: { pill: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" },
+  meeting_booked: { pill: "bg-cyan-50 text-cyan-700 ring-cyan-100", dot: "bg-cyan-500" },
+  follow_up: { pill: "bg-purple-50 text-purple-700 ring-purple-100", dot: "bg-purple-500" },
+  signed: { pill: "bg-blue-50 text-blue-700 ring-blue-100", dot: "bg-blue-500" },
+  active: { pill: "bg-emerald-50 text-emerald-700 ring-emerald-100", dot: "bg-emerald-500" },
+  in_revision: { pill: "bg-fuchsia-50 text-fuchsia-700 ring-fuchsia-100", dot: "bg-fuchsia-500" },
+  delivered: { pill: "bg-green-50 text-green-700 ring-green-100", dot: "bg-green-500" },
+}
+
+const AVATAR_TONES = [
+  "from-indigo-500 to-violet-600",
+  "from-sky-500 to-cyan-600",
+  "from-emerald-500 to-teal-600",
+  "from-amber-400 to-orange-500",
+  "from-rose-500 to-pink-600",
+  "from-slate-600 to-slate-800",
+]
+
+const ACTIVITY_TONES = {
+  created: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+  stage_change: "bg-violet-50 text-violet-600 ring-violet-100",
+  assigned: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+  task: "bg-amber-50 text-amber-600 ring-amber-100",
+  conversation: "bg-sky-50 text-sky-600 ring-sky-100",
+  note: "bg-sky-50 text-sky-600 ring-sky-100",
+  default: "bg-slate-100 text-slate-600 ring-slate-200",
+}
+
+const ACTIVITY_ICONS = {
+  created: "plus",
+  stage_change: "pipeline",
+  assigned: "team",
+  task: "tasks",
+  conversation: "leads",
+  note: "leads",
+}
+
+const CONTACT_METHODS = ["call", "email", "meeting", "whatsapp", "other"]
+
+// =========================
+// HELPERS
+// =========================
+
+const toneFor = (seed = "") => {
+  const sum = [...String(seed)].reduce((acc, ch) => acc + ch.charCodeAt(0), 0)
+  return AVATAR_TONES[sum % AVATAR_TONES.length]
+}
+
+const initialOf = (name) => (name ? name.trim().charAt(0).toUpperCase() : "?")
+
+const formatDate = (date) =>
+  date
+    ? new Date(date).toLocaleString([], {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : ""
+
+const capitalize = (value = "") => (value ? value.charAt(0).toUpperCase() + value.slice(1) : "")
+
+// =========================
+// UI PRIMITIVES
+// =========================
+
+const inputClass =
+  "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-60"
+
+const labelClass = "mb-1.5 block text-xs font-semibold text-slate-600"
+
+const btnPrimary =
+  "inline-flex h-10 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-4 text-sm font-semibold text-white shadow-md shadow-indigo-500/25 transition hover:-translate-y-px hover:shadow-lg hover:shadow-indigo-500/30 disabled:translate-y-0 disabled:opacity-60"
+
+const btnGhost =
+  "inline-flex h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900 disabled:opacity-60"
+
+const cardClass =
+  "rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
+
+const Avatar = ({ name, seed, size = "md" }) => {
+  const sizes = {
+    sm: "h-8 w-8 rounded-lg text-[11px]",
+    md: "h-10 w-10 rounded-xl text-sm",
+    lg: "h-[72px] w-[72px] rounded-2xl text-[28px]",
+  }
+  return (
+    <div
+      className={`flex shrink-0 items-center justify-center bg-gradient-to-br ${toneFor(seed)} ${sizes[size]} font-bold text-white shadow-md shadow-slate-900/10`}
+    >
+      {initialOf(name)}
+    </div>
+  )
+}
+
+const SectionCard = ({ title, subtitle, action, children, className = "", bodyClass = "" }) => (
+  <section className={`${cardClass} overflow-hidden ${className}`}>
+    <header className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
+      <div className="min-w-0">
+        <h2 className="text-[15px] font-bold tracking-tight text-slate-900">{title}</h2>
+        {subtitle && <p className="mt-0.5 text-xs text-slate-500">{subtitle}</p>}
+      </div>
+      {action}
+    </header>
+    <div className={bodyClass}>{children}</div>
+  </section>
+)
+
+const CountBadge = ({ children }) => (
+  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+    {children}
+  </span>
+)
+
+const EmptyState = ({ icon = "dashboard", children }) => (
+  <div className="flex flex-col items-center justify-center gap-2 px-5 py-12 text-center">
+    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+      <Icon name={icon} size={20} />
+    </div>
+    <p className="text-sm text-slate-400">{children}</p>
+  </div>
+)
+
+const StatCard = ({ label, value, icon, chip, isText = false }) => (
+  <div className={`${cardClass} group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5`}>
+    <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${chip}`}>
+      <Icon name={icon} size={18} />
+    </div>
+    <div className="min-w-0">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className={`mt-0.5 truncate font-bold tracking-tight text-slate-900 ${isText ? "text-base" : "text-2xl"}`}>
+        {value}
+      </p>
+    </div>
+  </div>
+)
+
+const SkeletonBlock = ({ className = "" }) => (
+  <div className={`animate-pulse rounded-2xl bg-slate-200/70 ${className}`} />
+)
+
+const LoadingState = () => (
+  <div className="w-full space-y-5">
+    <SkeletonBlock className="h-4 w-48" />
+    <SkeletonBlock className="h-36" />
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {[0, 1, 2, 3].map((i) => (
+        <SkeletonBlock key={i} className="h-24" />
+      ))}
+    </div>
+    <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+      <SkeletonBlock className="h-80 xl:col-span-2" />
+      <SkeletonBlock className="h-80" />
+    </div>
+  </div>
+)
+
+// =========================
+// PAGE
+// =========================
 
 export default function LeadDetail() {
   const { id } = useParams()
@@ -99,6 +289,7 @@ export default function LeadDetail() {
   const updateStage = async (newStage) => {
     const oldStage = lead?.stage
     if (newStage === oldStage) return
+
     const { error } = await supabase
       .from("clients")
       .update({ stage: newStage })
@@ -109,13 +300,22 @@ export default function LeadDetail() {
       return
     }
 
-    await logActivity("stage_change", `Stage changed from ${stageLabels[oldStage] || oldStage || "Unknown"} to ${stageLabels[newStage] || newStage}`)
-    const { error: eventError } = await supabase.functions.invoke("process-meta-events", { body: { limit: 20 } })
+    await logActivity(
+      "stage_change",
+      `Stage changed from ${stageLabels[oldStage] || oldStage || "Unknown"} to ${stageLabels[newStage] || newStage}`
+    )
+
+    const { error: eventError } = await supabase.functions.invoke("process-meta-events", {
+      body: { limit: 20 },
+    })
     if (eventError) console.warn("Meta conversion events will be retried later:", eventError.message)
 
     if (newStage === "contacted") {
       try {
-        const emailResult = await sendWelcomeEmailWhenContacted({ supabase, lead: { ...lead, stage: newStage } })
+        const emailResult = await sendWelcomeEmailWhenContacted({
+          supabase,
+          lead: { ...lead, stage: newStage },
+        })
         if (emailResult.status === "sent") {
           alert(`Welcome email sent to ${lead.email}.`)
         } else if (emailResult.status === "missing_email") {
@@ -133,8 +333,13 @@ export default function LeadDetail() {
     event.preventDefault()
     const value = revenueAmount === "" ? null : Number(revenueAmount)
     if (value !== null && (!Number.isFinite(value) || value < 0)) return
+
     setSavingRevenue(true)
-    const { error } = await supabase.from("clients").update({ revenue_amount: value }).eq("id", id)
+    const { error } = await supabase
+      .from("clients")
+      .update({ revenue_amount: value })
+      .eq("id", id)
+
     if (error) alert(`Could not save sale value: ${error.message}`)
     else fetchAll()
     setSavingRevenue(false)
@@ -183,9 +388,7 @@ export default function LeadDetail() {
     const { error } = await supabase.from("tasks").insert({
       client_id: id,
       title: taskTitle.trim(),
-      due_date: taskDue
-        ? new Date(taskDue)
-        : new Date(Date.now() + 86400000),
+      due_date: taskDue ? new Date(taskDue) : new Date(Date.now() + 86400000),
       status: "pending",
     })
 
@@ -264,58 +467,27 @@ export default function LeadDetail() {
   }
 
   // =========================
-  // HELPERS
+  // DERIVED DATA
   // =========================
 
-  const formatDate = (date) =>
-    date
-      ? new Date(date).toLocaleString([], {
-          day: "2-digit",
-          month: "short",
-          year: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-      : ""
+  const assignee = useMemo(
+    () => teamMembers.find((m) => String(m.id) === String(lead?.assigned_to)),
+    [teamMembers, lead]
+  )
 
-  const assignee = teamMembers.find((m) => m.id === lead?.assigned_to)
+  const pendingTasks = useMemo(
+    () => tasks.filter((t) => t.status !== "completed"),
+    [tasks]
+  )
 
-  // =========================
-  // STYLES (Tailwind)
-  // =========================
+  const sourceFields = [
+    { label: "Lead source", value: lead?.lead_source },
+    { label: "Campaign", value: lead?.utm_campaign },
+    { label: "UTM source", value: lead?.utm_source },
+    { label: "UTM medium", value: lead?.utm_medium },
+  ]
 
-  const card = "rounded-xl border border-gray-200 bg-white shadow-sm"
-  const input =
-    "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none transition placeholder:text-gray-400 focus:border-gray-400 focus:ring-4 focus:ring-gray-900/5"
-  const label = "mb-1.5 block text-xs font-semibold text-gray-700"
-  const btnDark =
-    "inline-flex h-10 items-center justify-center rounded-lg bg-gray-900 px-4 text-sm font-semibold text-white transition hover:-translate-y-px hover:bg-gray-800"
-  const btnLight =
-    "inline-flex h-8 items-center justify-center rounded-md border border-gray-200 bg-white px-3 text-xs font-semibold text-gray-600 transition hover:bg-gray-50"
-
-  const stageStyles = {
-    discovery: "bg-orange-50 text-orange-700",
-    contacted: "bg-violet-50 text-violet-700",
-    qualified: "bg-emerald-50 text-emerald-700",
-    meeting_booked: "bg-cyan-50 text-cyan-700",
-    follow_up: "bg-purple-50 text-purple-700",
-    signed: "bg-blue-50 text-blue-700",
-    active: "bg-emerald-50 text-emerald-700",
-    in_revision: "bg-fuchsia-50 text-fuchsia-700",
-    delivered: "bg-green-50 text-green-700",
-  }
-
-  const stageDots = {
-    discovery: "bg-orange-500",
-    contacted: "bg-violet-500",
-    qualified: "bg-emerald-500",
-    meeting_booked: "bg-cyan-500",
-    follow_up: "bg-purple-500",
-    signed: "bg-blue-500",
-    active: "bg-emerald-500",
-    in_revision: "bg-fuchsia-500",
-    delivered: "bg-green-500",
-  }
+  const tone = stageTone[lead?.stage] || { pill: "bg-slate-100 text-slate-600 ring-slate-200", dot: "bg-slate-400" }
 
   // =========================
   // STATES
@@ -323,361 +495,443 @@ export default function LeadDetail() {
 
   if (loading) {
     return (
-      <div className="py-20 text-center text-sm text-gray-400">
-        Loading lead...
+      <div className="w-full text-slate-900">
+        <LoadingState />
       </div>
     )
   }
 
   if (!lead) {
     return (
-      <div className={`${card} px-5 py-14 text-center`}>
-        <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-lg text-gray-400">
-          ◉
+      <div className={`${cardClass} flex flex-col items-center px-5 py-16 text-center`}>
+        <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
+          <Icon name="leads" size={22} />
         </div>
-        <h2 className="text-base font-semibold text-gray-700">Lead not found</h2>
-        <p className="mb-4 mt-1 text-xs text-gray-400">
-          This lead may have been deleted.
-        </p>
-        <Link to="/leads" className={btnDark}>
+        <h2 className="text-base font-semibold text-slate-800">Lead not found</h2>
+        <p className="mb-5 mt-1 text-sm text-slate-400">This lead may have been deleted.</p>
+        <Link to="/leads" className={btnPrimary}>
           ← Back to Leads
         </Link>
       </div>
     )
   }
 
-  const pendingTasks = tasks.filter((t) => t.status !== "completed")
-
   const statCards = [
-    { label: "Pending Tasks", value: pendingTasks.length, icon: "✓", color: "bg-orange-50 text-orange-500" },
-    { label: "Notes", value: notes.length, icon: "✎", color: "bg-violet-50 text-violet-600" },
-    { label: "Activities", value: activities.length, icon: "↗", color: "bg-emerald-50 text-emerald-600" },
-    { label: "Account Manager", value: assignee?.name || "Unassigned", icon: "◉", color: "bg-blue-50 text-blue-600", text: true },
+    {
+      label: "Pending Tasks",
+      value: pendingTasks.length,
+      icon: "tasks",
+      chip: "bg-amber-50 text-amber-600 ring-amber-100",
+    },
+    {
+      label: "Notes",
+      value: notes.length,
+      icon: "leads",
+      chip: "bg-violet-50 text-violet-600 ring-violet-100",
+    },
+    {
+      label: "Activities",
+      value: activities.length,
+      icon: "pipeline",
+      chip: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    },
+    {
+      label: "Account Manager",
+      value: assignee?.name || "Unassigned",
+      icon: "team",
+      chip: "bg-indigo-50 text-indigo-600 ring-indigo-100",
+      isText: true,
+    },
   ]
 
   return (
-    <div className="w-full text-gray-900">
+    <div className="w-full space-y-5 text-slate-900">
+      {/* BREADCRUMB + BACK */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-xs text-slate-400">
+          <Link to="/" className="no-underline transition hover:text-slate-700">CRM</Link>
+          <span className="text-slate-300">/</span>
+          <Link to="/leads" className="no-underline transition hover:text-slate-700">Leads</Link>
+          <span className="text-slate-300">/</span>
+          <span className="truncate font-medium text-slate-600">{lead.name}</span>
+        </nav>
 
-      {/* HEADER */}
-      <div className="mb-[22px] flex items-end justify-between gap-3 max-[640px]:flex-col max-[640px]:items-start">
-        <div>
-          <div className="mb-2 text-xs text-gray-400">
-            <Link to="/" className="no-underline hover:text-gray-900">CRM</Link>
-            <span className="mx-1.5 text-gray-300">/</span>
-            <Link to="/leads" className="no-underline hover:text-gray-900">Leads</Link>
-            <span className="mx-1.5 text-gray-300">/</span>
-            {lead.name}
-          </div>
-
-          <h1 className="text-[22px] font-bold tracking-tight min-[481px]:text-[28px]">
-            {lead.name}
-          </h1>
-
-          <p className="mt-1.5 text-sm text-gray-500">
-            {[lead.company, lead.service_name].filter(Boolean).join(" · ") || "No company or service"}
-          </p>
-        </div>
-
-        <Link to="/leads" className={`${btnLight} h-10 px-4 text-sm`}>
+        <Link to="/leads" className={btnGhost}>
           ← Back to Leads
         </Link>
       </div>
 
-      {/* PROFILE CARD */}
-      <div className={`${card} mb-[18px] flex flex-wrap items-center gap-5 p-5`}>
-        <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-2xl bg-indigo-50 text-[28px] font-bold text-indigo-600">
-          {(lead.name || "?").charAt(0).toUpperCase()}
-        </div>
+      {/* HERO */}
+      <section className={`${cardClass} relative overflow-hidden p-6 sm:p-7`}>
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-indigo-400/15 to-violet-400/15 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-20 left-1/4 h-52 w-52 rounded-full bg-gradient-to-tr from-sky-300/10 to-emerald-300/10 blur-3xl" />
 
-        <div className="min-w-[220px] flex-1">
-          <h2 className="text-lg font-bold">{lead.name}</h2>
-
-          <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] text-gray-500">
-            {lead.email && <a
-              href={`mailto:${lead.email}`}
-              className="no-underline hover:text-gray-900 hover:underline"
-            >
-              ✉ {lead.email}
-            </a>}
-
-            {lead.phone && <span>☎ {lead.phone}</span>}
-
-            <span
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold ${
-                stageStyles[lead.stage] || "bg-gray-100 text-gray-500"
-              }`}
-            >
-              <i className={`h-1.5 w-1.5 rounded-full ${stageDots[lead.stage] || "bg-gray-400"}`}></i>
-              {stageLabels[lead.stage] || "Unknown"}
-            </span>
-          </div>
-        </div>
-
-        <div className="grid w-full grid-cols-1 gap-3.5 min-[641px]:w-auto min-[641px]:grid-cols-[repeat(2,190px)]">
-          <div>
-            <label className={label}>Stage</label>
-            <select
-              className={`${input} cursor-pointer`}
-              value={lead.stage || ""}
-              onChange={(e) => updateStage(e.target.value)}
-            >
-              {stages.map((stage) => (
-                <option key={stage} value={stage}>
-                {stageLabels[stage] || stage}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={label}>Assigned To</label>
-            <select
-              className={`${input} cursor-pointer`}
-              value={lead.assigned_to || ""}
-              onChange={(e) => updateAssignee(e.target.value)}
-            >
-              <option value="">Unassigned</option>
-              {teamMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <section className={`${card} mb-[18px] p-5`}>
-        <div className="mb-4"><h2 className="text-base font-bold">Marketing attribution & sale value</h2><p className="mt-1 text-xs text-gray-500">Campaign fields are captured from the landing page. Add the confirmed sale amount to make revenue and ROAS useful.</p></div>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[["Lead source", lead.lead_source], ["Campaign", lead.utm_campaign], ["UTM source", lead.utm_source], ["UTM medium", lead.utm_medium]].map(([labelText, value]) => <div key={labelText}><p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">{labelText}</p><p className="mt-1 break-words text-sm font-medium text-gray-700">{value || "—"}</p></div>)}
-        </div>
-        <form onSubmit={updateRevenue} className="mt-5 flex flex-wrap items-end gap-3 border-t border-gray-100 pt-4">
-          <label className="w-full max-w-xs text-xs font-semibold text-gray-600">Confirmed sale amount (INR)<input className={`${input} mt-1.5`} type="number" min="0" step="0.01" value={revenueAmount} onChange={(event) => setRevenueAmount(event.target.value)} placeholder="Leave blank until sale" /></label>
-          <button disabled={savingRevenue} className={btnLight}>{savingRevenue ? "Saving…" : "Save sale amount"}</button>
-        </form>
-      </section>
-
-      {/* CONVERSATION AND FOLLOW-UP */}
-      <section className={`${card} mb-[18px] overflow-hidden`}>
-        <div className="border-b border-gray-100 px-5 py-4">
-          <h2 className="text-base font-bold">Log a conversation</h2>
-          <p className="mt-1 text-xs text-gray-500">Record the discussion and schedule the next follow-up.</p>
-        </div>
-        <form onSubmit={addConversation} className="grid grid-cols-1 gap-3 p-5 md:grid-cols-2 xl:grid-cols-4">
-          <label className={`${label} md:col-span-1`}>
-            Contact method
-            <select className={`${input} mt-1.5`} value={conversationMethod} onChange={(event) => setConversationMethod(event.target.value)}>
-              {["call", "email", "meeting", "whatsapp", "other"].map((method) => <option key={method} value={method}>{method[0].toUpperCase() + method.slice(1)}</option>)}
-            </select>
-          </label>
-          <label className={`${label} md:col-span-1`}>
-            Next follow-up
-            <input className={`${input} mt-1.5`} type="datetime-local" value={conversationFollowUp} onChange={(event) => setConversationFollowUp(event.target.value)} />
-          </label>
-          <label className={`${label} md:col-span-2`}>
-            Discussion
-            <textarea className={`${input} mt-1.5 h-10 min-h-10 py-2`} value={conversationText} onChange={(event) => setConversationText(event.target.value)} placeholder="What did you discuss with the lead?" required maxLength={3000} />
-          </label>
-          <label className={`${label} md:col-span-2`}>
-            Outcome / follow-up note
-            <input className={`${input} mt-1.5`} value={conversationOutcome} onChange={(event) => setConversationOutcome(event.target.value)} placeholder="Decision, next step, or reminder" maxLength={1000} />
-          </label>
-          <button type="submit" disabled={savingConversation} className={`${btnDark} self-end disabled:opacity-60`}>
-            {savingConversation ? "Saving..." : "Save conversation"}
-          </button>
-        </form>
-        {lead.next_follow_up && <p className="border-t border-gray-100 px-5 py-3 text-xs text-violet-700">Next follow-up: {formatDate(lead.next_follow_up)}</p>}
-      </section>
-
-      {/* STAT CARDS */}
-      <div className="mb-[18px] grid grid-cols-1 gap-3.5 min-[481px]:grid-cols-2 min-[1101px]:grid-cols-4">
-        {statCards.map((item) => (
-          <div key={item.label} className={`${card} flex min-h-[88px] items-center gap-3.5 p-4`}>
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] text-base font-bold ${item.color}`}>
-              <Icon name={item.label === "Pending Tasks" ? "tasks" : item.label === "Notes" ? "leads" : item.label === "Activities" ? "pipeline" : "team"} size={18} />
-            </div>
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-5">
+            <Avatar name={lead.name} seed={lead.id} size="lg" />
 
             <div className="min-w-0">
-              <span className="mb-1 block text-xs text-gray-400">{item.label}</span>
-              <strong
-                className={`block truncate font-bold text-gray-900 ${
-                  item.text ? "text-lg" : "text-[22px]"
-                }`}
-              >
-                {item.value}
-              </strong>
+              <h1 className="truncate text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]">
+                {lead.name}
+              </h1>
+              <p className="mt-1 truncate text-sm text-slate-500">
+                {[lead.company, lead.service_name].filter(Boolean).join(" · ") || "No company or service"}
+              </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span
+                  className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${tone.pill}`}
+                >
+                  <span className={`h-1.5 w-1.5 rounded-full ${tone.dot}`} />
+                  {stageLabels[lead.stage] || "Unknown"}
+                </span>
+
+                {lead.email && (
+                  <a
+                    href={`mailto:${lead.email}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600 no-underline transition hover:bg-slate-200 hover:text-slate-900"
+                  >
+                    <Icon name="leads" size={12} />
+                    {lead.email}
+                  </a>
+                )}
+
+                {lead.phone && (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-600">
+                    <Icon name="team" size={12} />
+                    {lead.phone}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          <div className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 lg:w-[420px] lg:shrink-0">
+            <div>
+              <label className={labelClass} htmlFor="lead-stage">Stage</label>
+              <select
+                id="lead-stage"
+                className={`${inputClass} cursor-pointer`}
+                value={lead.stage || ""}
+                onChange={(e) => updateStage(e.target.value)}
+              >
+                {stages.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {stageLabels[stage] || stage}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass} htmlFor="lead-assignee">Assigned to</label>
+              <select
+                id="lead-assignee"
+                className={`${inputClass} cursor-pointer`}
+                value={lead.assigned_to || ""}
+                onChange={(e) => updateAssignee(e.target.value)}
+              >
+                <option value="">Unassigned</option>
+                {teamMembers.map((member) => (
+                  <option key={member.id} value={member.id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* STATS */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {statCards.map((item) => (
+          <StatCard key={item.label} {...item} />
         ))}
       </div>
 
-      <div className="mb-[18px] grid grid-cols-1 items-start gap-[18px] min-[1001px]:grid-cols-2">
-
-        {/* TASKS */}
-        <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
+      {/* CONVERSATION + ATTRIBUTION */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <SectionCard
+          className="xl:col-span-2"
+          title="Log a conversation"
+          subtitle="Record the discussion and schedule the next follow-up."
+          action={
+            lead.next_follow_up ? (
+              <span className="shrink-0 rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">
+                Next: {formatDate(lead.next_follow_up)}
+              </span>
+            ) : null
+          }
+        >
+          <form onSubmit={addConversation} className="grid grid-cols-1 gap-4 p-5 sm:p-6 md:grid-cols-2">
             <div>
-              <h2 className="text-base font-bold">Tasks</h2>
-              <p className="mt-0.5 text-xs text-gray-400">{tasks.length} total</p>
+              <label className={labelClass} htmlFor="conv-method">Contact method</label>
+              <select
+                id="conv-method"
+                className={`${inputClass} cursor-pointer`}
+                value={conversationMethod}
+                onChange={(e) => setConversationMethod(e.target.value)}
+              >
+                {CONTACT_METHODS.map((method) => (
+                  <option key={method} value={method}>
+                    {capitalize(method)}
+                  </option>
+                ))}
+              </select>
             </div>
+
+            <div>
+              <label className={labelClass} htmlFor="conv-followup">Next follow-up</label>
+              <input
+                id="conv-followup"
+                type="datetime-local"
+                className={inputClass}
+                value={conversationFollowUp}
+                onChange={(e) => setConversationFollowUp(e.target.value)}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass} htmlFor="conv-text">Discussion</label>
+              <textarea
+                id="conv-text"
+                className={`${inputClass} h-auto min-h-[96px] resize-y py-2.5`}
+                placeholder="What did you discuss with the lead?"
+                value={conversationText}
+                onChange={(e) => setConversationText(e.target.value)}
+                required
+                maxLength={3000}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className={labelClass} htmlFor="conv-outcome">Outcome / follow-up note</label>
+              <input
+                id="conv-outcome"
+                className={inputClass}
+                value={conversationOutcome}
+                onChange={(e) => setConversationOutcome(e.target.value)}
+                placeholder="Decision, next step, or reminder"
+                maxLength={1000}
+              />
+            </div>
+
+            <div className="flex justify-end md:col-span-2">
+              <button type="submit" disabled={savingConversation} className={btnPrimary}>
+                {savingConversation ? "Saving..." : "Save conversation"}
+              </button>
+            </div>
+          </form>
+        </SectionCard>
+
+        <SectionCard
+          title="Marketing & sale value"
+          subtitle="Captured from the landing page"
+        >
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 p-5 sm:p-6">
+            {sourceFields.map((field) => (
+              <div key={field.label} className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{field.label}</p>
+                <p className="mt-1 truncate text-sm font-medium text-slate-700" title={field.value || ""}>
+                  {field.value || "—"}
+                </p>
+              </div>
+            ))}
           </div>
 
           <form
+            onSubmit={updateRevenue}
+            className="border-t border-slate-100 bg-slate-50/60 p-5 sm:p-6"
+          >
+            <label className={labelClass} htmlFor="revenue">Confirmed sale amount (INR)</label>
+            <div className="flex gap-2">
+              <input
+                id="revenue"
+                type="number"
+                min="0"
+                step="0.01"
+                className={inputClass}
+                value={revenueAmount}
+                onChange={(e) => setRevenueAmount(e.target.value)}
+                placeholder="Leave blank until sale"
+              />
+              <button type="submit" disabled={savingRevenue} className={`${btnGhost} h-10 shrink-0`}>
+                {savingRevenue ? "Saving…" : "Save"}
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-slate-400">
+              Add the confirmed amount to make revenue and ROAS reports useful.
+            </p>
+          </form>
+        </SectionCard>
+      </div>
+
+      {/* TASKS + NOTES */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
+        <SectionCard
+          title="Tasks"
+          subtitle={`${pendingTasks.length} pending · ${tasks.length} total`}
+          action={<CountBadge>{tasks.length}</CountBadge>}
+        >
+          <form
             onSubmit={addTask}
-            className="flex flex-wrap gap-2.5 border-b border-gray-100 px-5 py-4"
+            className="flex flex-col gap-2.5 border-b border-slate-100 bg-slate-50/50 p-4 sm:flex-row sm:p-5"
           >
             <input
-              className={`${input} min-w-[160px] flex-1`}
+              className={`${inputClass} flex-1`}
               placeholder="New task title"
               value={taskTitle}
               onChange={(e) => setTaskTitle(e.target.value)}
             />
             <input
-              className={`${input} w-full shrink-0 min-[481px]:w-[160px]`}
               type="date"
+              className={`${inputClass} sm:w-[160px] sm:shrink-0`}
               value={taskDue}
               onChange={(e) => setTaskDue(e.target.value)}
             />
-            <button type="submit" className={btnDark}>
-              + Add
+            <button type="submit" className={`${btnPrimary} sm:shrink-0`}>
+              <Icon name="plus" size={15} />
+              Add
             </button>
           </form>
 
           {tasks.length === 0 ? (
-            <div className="px-5 py-12 text-center text-sm text-gray-400">
-              No tasks yet.
-            </div>
+            <EmptyState icon="tasks">No tasks yet.</EmptyState>
           ) : (
-            tasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex items-center justify-between gap-3 border-b border-gray-100 px-5 py-3.5 last:border-b-0 hover:bg-gray-50"
-              >
-                <div className="min-w-0">
-                  <strong
-                    className={`block text-sm font-semibold ${
-                      task.status === "completed"
-                        ? "text-gray-400 line-through"
-                        : "text-gray-900"
-                    }`}
+            <div className="divide-y divide-slate-100">
+              {tasks.map((task) => {
+                const done = task.status === "completed"
+                return (
+                  <div
+                    key={task.id}
+                    className="flex items-center justify-between gap-3 px-5 py-3.5 transition hover:bg-slate-50/70"
                   >
-                    {task.title}
-                  </strong>
-                  <span className="mt-0.5 block text-xs text-gray-400">
-                    Due:{" "}
-                    {task.due_date
-                      ? new Date(task.due_date).toLocaleDateString()
-                      : "No due date"}
-                  </span>
-                </div>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${done ? "bg-emerald-500" : "bg-amber-400"}`}
+                      />
+                      <div className="min-w-0">
+                        <p
+                          className={`truncate text-sm font-semibold ${
+                            done ? "text-slate-400 line-through" : "text-slate-900"
+                          }`}
+                        >
+                          {task.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-slate-400">
+                          Due {task.due_date ? new Date(task.due_date).toLocaleDateString() : "no due date"}
+                        </p>
+                      </div>
+                    </div>
 
-                {task.status === "completed" ? (
-                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-                    <i className="h-1.5 w-1.5 rounded-full bg-emerald-500"></i>
-                    Completed
-                  </span>
-                ) : (
-                  <button
-                    className={`${btnLight} shrink-0`}
-                    onClick={() => markTaskDone(task.id)}
-                  >
-                    Mark Done
-                  </button>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-
-        {/* NOTES */}
-        <div className={`${card} overflow-hidden`}>
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-            <div>
-              <h2 className="text-base font-bold">Notes</h2>
-              <p className="mt-0.5 text-xs text-gray-400">{notes.length} total</p>
+                    {done ? (
+                      <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100">
+                        Completed
+                      </span>
+                    ) : (
+                      <button type="button" className={`${btnGhost} shrink-0`} onClick={() => markTaskDone(task.id)}>
+                        Mark done
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
             </div>
-          </div>
+          )}
+        </SectionCard>
 
+        <SectionCard
+          title="Notes"
+          subtitle="Internal notes, visible to your team"
+          action={<CountBadge>{notes.length}</CountBadge>}
+        >
           <form
             onSubmit={addNote}
-            className="flex flex-col items-start gap-2.5 border-b border-gray-100 px-5 py-4"
+            className="flex flex-col gap-2.5 border-b border-slate-100 bg-slate-50/50 p-4 sm:p-5"
           >
             <textarea
-              className={`${input} h-auto min-h-[90px] resize-y py-2.5`}
+              className={`${inputClass} h-auto min-h-[88px] resize-y py-2.5`}
               placeholder="Write a note about this lead..."
               value={noteText}
               onChange={(e) => setNoteText(e.target.value)}
             />
-            <button type="submit" className={btnDark}>
-              + Add Note
-            </button>
+            <div className="flex justify-end">
+              <button type="submit" className={btnPrimary}>
+                <Icon name="plus" size={15} />
+                Add note
+              </button>
+            </div>
           </form>
 
           {notes.length === 0 ? (
-            <div className="px-5 py-12 text-center text-sm text-gray-400">
-              No notes yet.
-            </div>
+            <EmptyState icon="leads">No notes yet.</EmptyState>
           ) : (
-            notes.map((note) => (
-              <div
-                key={note.id}
-                className="border-b border-gray-100 px-5 py-3.5 last:border-b-0 hover:bg-gray-50"
-              >
-                <p className="whitespace-pre-wrap text-sm text-gray-800">
-                  {note.note}
-                </p>
-                <span className="mt-1 block text-xs text-gray-400">
-                  {formatDate(note.created_at)}
-                </span>
-              </div>
-            ))
+            <div className="divide-y divide-slate-100">
+              {notes.map((note) => (
+                <div key={note.id} className="px-5 py-3.5 transition hover:bg-slate-50/70">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{note.note}</p>
+                  <span className="mt-1.5 block text-[11px] text-slate-400">{formatDate(note.created_at)}</span>
+                </div>
+              ))}
+            </div>
           )}
-        </div>
+        </SectionCard>
       </div>
 
       {/* ACTIVITY TIMELINE */}
-      <div className={`${card} overflow-hidden`}>
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <div>
-            <h2 className="text-base font-bold">Activity Timeline</h2>
-            <p className="mt-0.5 text-xs text-gray-400">{activities.length} total</p>
-          </div>
-        </div>
-
+      <SectionCard
+        title="Activity timeline"
+        subtitle="Everything that has happened on this lead"
+        action={<CountBadge>{activities.length}</CountBadge>}
+      >
         {activities.length === 0 ? (
-          <div className="px-5 py-12 text-center text-sm text-gray-400">
-            No activity recorded.
-          </div>
+          <EmptyState icon="dashboard">No activity recorded.</EmptyState>
         ) : (
-          <div className="px-5 py-2">
+          <ol className="relative px-5 py-4 sm:px-6">
+            <span className="absolute bottom-6 left-[37px] top-6 w-px bg-slate-200 sm:left-[41px]" aria-hidden="true" />
             {activities.map((activity) => (
-              <div
-                key={activity.id}
-                className="flex gap-3.5 border-b border-gray-100 py-3.5 last:border-b-0"
-              >
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-xs font-bold text-indigo-600">
-                  {(activity.type || "•").charAt(0).toUpperCase()}
+              <li key={activity.id} className="relative flex gap-4 py-3">
+                <div
+                  className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${
+                    ACTIVITY_TONES[activity.type] || ACTIVITY_TONES.default
+                  }`}
+                >
+                  <Icon name={ACTIVITY_ICONS[activity.type] || "dashboard"} size={15} />
                 </div>
 
-                <div className="min-w-0">
-                  <strong className="block text-sm font-semibold capitalize text-gray-900">
-                    {activity.type}
-                  </strong>
-                  <p className="text-[13px] text-gray-600">
-                    {activity.description}
-                  </p>
-                  {activity.contact_method && <span className="mt-1 block text-xs capitalize text-violet-700">Contacted by {activity.contact_method}</span>}
-                  {activity.outcome && <p className="mt-1 text-xs text-gray-500">Outcome: {activity.outcome}</p>}
-                  <span className="mt-0.5 block text-xs text-gray-400">
-                    {formatDate(activity.created_at)}
-                  </span>
+                <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-white p-3.5 shadow-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[13px] font-semibold capitalize text-slate-900">
+                      {(activity.type || "activity").replace(/_/g, " ")}
+                    </p>
+                    <span className="text-[11px] text-slate-400">{formatDate(activity.created_at)}</span>
+                  </div>
+
+                  {activity.description && (
+                    <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{activity.description}</p>
+                  )}
+
+                  {(activity.contact_method || activity.outcome) && (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      {activity.contact_method && (
+                        <span className="rounded-md bg-violet-50 px-2 py-0.5 text-[11px] font-semibold capitalize text-violet-700 ring-1 ring-violet-100">
+                          via {activity.contact_method}
+                        </span>
+                      )}
+                      {activity.outcome && (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          Outcome: {activity.outcome}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ol>
         )}
-      </div>
+      </SectionCard>
     </div>
   )
 }

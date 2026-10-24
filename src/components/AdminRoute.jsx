@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase"
 
 function AdminRoute({ children }) {
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [role, setRole] = useState("")
 
   useEffect(() => {
     let active = true
@@ -12,7 +12,7 @@ function AdminRoute({ children }) {
       const { data: { user }, error: userError } = await supabase.auth.getUser()
       if (userError) throw userError
       if (!user) {
-        if (active) setIsAdmin(false)
+        if (active) setRole("")
         return
       }
 
@@ -23,13 +23,13 @@ function AdminRoute({ children }) {
         .single()
 
       if (profileError) throw profileError
-      if (active) setIsAdmin(profile?.role === "admin")
+      if (active) setRole(profile?.role || "")
     }
 
     checkAdmin()
       .catch((error) => {
         console.error("Admin check error:", error)
-        if (active) setIsAdmin(false)
+        if (active) setRole("")
       })
       .finally(() => {
         if (active) setLoading(false)
@@ -58,9 +58,7 @@ function AdminRoute({ children }) {
   }
 
   // Not admin
-  if (!isAdmin) {
-    return <Navigate to="/my-dashboard" replace />
-  }
+  if (role !== "admin") return <Navigate to={role === "manager" ? "/manager-dashboard" : "/my-dashboard"} replace />
 
   // Admin
   return children

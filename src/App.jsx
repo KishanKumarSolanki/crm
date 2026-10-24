@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from "react-router-
 
 const Login = lazy(() => import("./pages/Login"))
 const Dashboard = lazy(() => import("./pages/Dashboard"))
+const ManagerDashboard = lazy(() => import("./pages/ManagerDashboard"))
 const Leads = lazy(() => import("./pages/Leads"))
 const LeadDetail = lazy(() => import("./pages/LeadDetail"))
 const Pipeline = lazy(() => import("./pages/Pipeline"))
@@ -21,6 +22,7 @@ function LegacyLeadDetailRedirect() {
 import ProtectedRoute from "./components/ProtectedRoute"
 import AdminRoute from "./components/AdminRoute"
 import TeamMemberRoute from "./components/TeamMemberRoute"
+import RoleRoute from "./components/RoleRoute"
 import CRMLayout from "./components/CRMLayout"
 
 function App() {
@@ -60,6 +62,8 @@ function App() {
             element={<AdminRoute><Dashboard /></AdminRoute>}
           />
 
+          <Route path="/manager-dashboard" element={<RoleRoute allowedRoles={["manager"]}><ManagerDashboard /></RoleRoute>} />
+
           <Route path="/my-dashboard" element={<TeamMemberRoute><TeamMemberDashboard /></TeamMemberRoute>} />
           <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
 
@@ -67,7 +71,7 @@ function App() {
           {/* LEADS */}
           <Route
             path="/leads"
-            element={<AdminRoute><Leads /></AdminRoute>}
+            element={<RoleRoute allowedRoles={["admin", "manager"]}><Leads /></RoleRoute>}
           />
           <Route path="/clients" element={<Navigate to="/leads" replace />} />
           <Route path="/client" element={<Navigate to="/leads" replace />} />
@@ -76,7 +80,7 @@ function App() {
           {/* LEAD DETAIL */}
           <Route
             path="/lead/:id"
-            element={<LeadDetail />}
+            element={<RoleRoute allowedRoles={["admin", "manager", "staff", "team_member"]}><LeadDetail /></RoleRoute>}
           />
           <Route path="/client/:id" element={<LegacyLeadDetailRedirect />} />
 
@@ -84,14 +88,14 @@ function App() {
           {/* PIPELINE */}
           <Route
             path="/pipeline"
-            element={<AdminRoute><Pipeline /></AdminRoute>}
+            element={<RoleRoute allowedRoles={["admin", "manager"]}><Pipeline /></RoleRoute>}
           />
 
 
           {/* TASKS */}
           <Route
             path="/tasks"
-            element={<AdminRoute><Tasks /></AdminRoute>}
+            element={<RoleRoute allowedRoles={["admin", "manager"]}><Tasks /></RoleRoute>}
           />
 
 
