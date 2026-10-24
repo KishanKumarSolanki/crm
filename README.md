@@ -25,6 +25,7 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
    - `20261024000000_igs_external_lead_id.sql` supports duplicate-safe enquiries from the IGS website.
    - `20261024100000_welcome_email_sent_at.sql` records one-time welcome email delivery.
    - `20261024110000_manager_role_access.sql` adds manager permissions and scopes team-member tasks.
+   - `20261024120000_daily_reports.sql` adds one editable daily report per team member or manager per day.
    - Review the access-control notes below before applying the migrations to an existing database.
 
 4. Start the development server:
@@ -62,6 +63,7 @@ Never put a Supabase service-role key in a `VITE_*` variable or browser code.
 - `admin` uses the full CRM, including marketing, team management, and account role assignment.
 - `manager` gets a manager dashboard and can view/update the shared lead queue, log lead notes/activity, and create or assign tasks. Managers cannot delete leads or change account roles.
 - `staff` and legacy `team_member` accounts use My Dashboard and can see/update tasks assigned to their linked team-member record. The account email must match a team-member email; the migration links them automatically.
+- Managers and team members can submit/update one report per day from Daily Report. Admins can review all submitted reports and see which team accounts have not submitted from Daily Reports.
 - After applying the migrations, create each login in Supabase Authentication. Sign in as an admin, open Team Members, and set the account's Login role to Manager or Team Member. Add a matching Team Member record for each staff login. Set the initial admin role in the `profiles` table through Supabase if one does not already exist.
 - Supabase RLS enforces the data access in addition to UI routes. Apply the new migration before using manager and member accounts.
 - There is no organization/tenant column in the current app model, so this migration does not isolate multiple companies from each other. Do not use this policy set for a multi-tenant deployment without adding and enforcing tenant ownership.

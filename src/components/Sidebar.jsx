@@ -8,6 +8,8 @@ const menuItems = [
   { name: "Leads", path: "/leads", icon: "leads", adminOnly: true, managerAccess: true },
   { name: "Pipeline", path: "/pipeline", icon: "pipeline", adminOnly: true, managerAccess: true },
   { name: "Marketing", path: "/marketing", icon: "marketing", adminOnly: true },
+  { name: "Daily Reports", path: "/daily-reports", icon: "tasks", adminOnly: true },
+  { name: "Daily Report", path: "/daily-report", icon: "tasks", reportSubmitterOnly: true },
   { name: "Tasks", path: "/tasks", icon: "tasks", adminOnly: true, managerAccess: true },
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];
@@ -19,6 +21,7 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
     (item) =>
       (!item.adminOnly || role === "admin" || (item.managerAccess && role === "manager")) &&
       (!item.managerOnly || role === "manager") &&
+      (!item.reportSubmitterOnly || role === "manager" || MEMBER_ROLES.includes(role)) &&
       (!item.memberOnly || MEMBER_ROLES.includes(role))
   );
 
