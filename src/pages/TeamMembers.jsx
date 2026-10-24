@@ -106,6 +106,7 @@ export default function TeamMembers() {
   const [members, setMembers] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [roleSaving, setRoleSaving] = useState("");
+  const [serviceSaving, setServiceSaving] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [loading, setLoading] = useState(false);
@@ -132,7 +133,7 @@ export default function TeamMembers() {
   };
 
   const fetchAccounts = async () => {
-    const { data, error } = await supabase.from("profiles").select("id,full_name,email,role").order("email", { ascending: true });
+    const { data, error } = await supabase.from("profiles").select("id,full_name,email,role,manager_service").order("email", { ascending: true });
     if (error) console.error("Profile role list error:", error);
     else setAccounts(data || []);
   };
@@ -148,6 +149,13 @@ export default function TeamMembers() {
     if (error) alert(`Could not update role: ${error.message}`);
     else setAccounts((current) => current.map((item) => item.id === profile.id ? { ...item, role } : item));
     setRoleSaving("");
+  };
+
+  const saveManagerService = async (profile) => {
+    setServiceSaving(profile.id);
+    const { error } = await supabase.from("profiles").update({ manager_service: profile.manager_service?.trim() || null }).eq("id", profile.id);
+    if (error) alert(`Could not save manager service: ${error.message}`);
+    setServiceSaving("");
   };
 
   const handleAddMember = async (e) => {
@@ -267,11 +275,8 @@ export default function TeamMembers() {
       <div className="flex items-start gap-3 rounded-2xl border border-violet-200/70 bg-violet-50/70 px-4 py-3.5 text-sm text-violet-900">
         <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-violet-500" />
         <p className="leading-relaxed">
-          <strong className="font-semibold">Login setup:</strong> Add a unique email here, then create or invite that same email under
-          Supabase Authentication → Users. Set its profile role to{" "}
-          <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[12px] text-violet-800 ring-1 ring-violet-100">manager</code> or{" "}
-          <code className="rounded-md bg-white px-1.5 py-0.5 font-mono text-[12px] text-violet-800 ring-1 ring-violet-100">staff</code>. Use Login roles below to change an account later.
-          Matching emails link automatically after the migration is applied.
+          <strong className="font-semibold">Login setup:</strong> Create or invite accounts under Supabase Authentication, then give each account an Admin or Manager role below.
+          Set a Manager's service scope to the matching lead service or source, such as IGS.
         </p>
       </div>
 
@@ -279,7 +284,7 @@ export default function TeamMembers() {
       <section className={`${cardClass} overflow-hidden`}>
         <div className="border-b border-slate-100 px-5 py-4 sm:px-6">
           <h2 className="text-[15px] font-bold text-slate-900">Login roles</h2>
-          <p className="mt-1 text-xs text-slate-500">Choose which dashboard and permissions each authenticated account receives.</p>
+          <p className="mt-1 text-xs text-slate-500">Only Admin and Manager accounts can sign in. Each Manager must have one service/source scope.</p>
         </div>
         {accounts.length === 0 ? (
           <p className="px-5 py-8 text-center text-sm text-slate-400">No login profiles found yet. Create the account in Supabase Authentication first.</p>
@@ -292,12 +297,17 @@ export default function TeamMembers() {
                   <p className="truncate text-xs text-slate-400">{account.email || account.id}</p>
                 </div>
                 <label className="sr-only" htmlFor={`role-${account.id}`}>Role for {account.email || account.id}</label>
-                <select id={`role-${account.id}`} value={account.role || "staff"} disabled={roleSaving === account.id} onChange={(event) => changeRole(account, event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-50">
+                <select id={`role-${account.id}`} value={["admin", "manager"].includes(account.role) ? account.role : account.role || "legacy"} disabled={roleSaving === account.id} onChange={(event) => changeRole(account, event.target.value)} className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 disabled:opacity-50">
+                  {!['admin', 'manager'].includes(account.role) && <option value={account.role || "legacy"} disabled>Legacy role — reassign</option>}
                   <option value="admin">Admin</option>
                   <option value="manager">Manager</option>
-                  <option value="staff">Team Member</option>
-                  <option value="team_member">Team Member (legacy)</option>
                 </select>
+                {account.role === "manager" && <div className="flex w-full flex-wrap items-center gap-2 pl-0 sm:pl-1">
+                  <label className="sr-only" htmlFor={`service-${account.id}`}>Manager service scope for {account.email || account.id}</label>
+                  <input id={`service-${account.id}`} value={account.manager_service || ""} onChange={(event) => setAccounts((current) => current.map((item) => item.id === account.id ? { ...item, manager_service: event.target.value } : item))} placeholder="Service/source, e.g. IGS" className="h-10 min-w-[220px] flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none placeholder:text-slate-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10" />
+                  <button type="button" disabled={serviceSaving === account.id} onClick={() => saveManagerService(account)} className="h-10 rounded-xl border border-indigo-200 bg-indigo-50 px-3 text-xs font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50">{serviceSaving === account.id ? "Saving…" : "Save scope"}</button>
+                  <span className="w-full text-xs text-slate-400">Manager only sees leads whose Service or Lead Source matches this value.</span>
+                </div>}
               </div>
             ))}
           </div>

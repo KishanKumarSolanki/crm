@@ -58,7 +58,7 @@ function AdminRoute({ children }) {
   }
 
   // Not admin
-  if (role !== "admin") return <Navigate to={role === "manager" ? "/manager-dashboard" : "/my-dashboard"} replace />
+  if (role !== "admin") return <Navigate to={role === "manager" ? "/manager-dashboard" : "/login"} replace />
 
   // Admin
   return children

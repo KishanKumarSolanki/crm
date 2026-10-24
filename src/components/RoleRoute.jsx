@@ -5,8 +5,6 @@ import { supabase } from "../lib/supabase";
 const HOME_BY_ROLE = {
   admin: "/",
   manager: "/manager-dashboard",
-  staff: "/my-dashboard",
-  team_member: "/my-dashboard",
 };
 
 export default function RoleRoute({ children, allowedRoles }) {

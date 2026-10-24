@@ -53,6 +53,42 @@ const ACTIVITY_ICONS = {
   conversation: "leads",
 }
 
+// Counter cards shown above the activity list
+const ACTIVITY_COUNTERS = [
+  {
+    key: "new",
+    label: "New leads",
+    icon: "plus",
+    chip: "bg-sky-50 text-sky-600 ring-sky-100",
+    activeRing: "ring-sky-400 bg-sky-50/60",
+    text: "text-sky-700",
+  },
+  {
+    key: "followup",
+    label: "Follow-ups",
+    icon: "tasks",
+    chip: "bg-amber-50 text-amber-600 ring-amber-100",
+    activeRing: "ring-amber-400 bg-amber-50/60",
+    text: "text-amber-700",
+  },
+  {
+    key: "assigned",
+    label: "Assigned",
+    icon: "team",
+    chip: "bg-emerald-50 text-emerald-600 ring-emerald-100",
+    activeRing: "ring-emerald-400 bg-emerald-50/60",
+    text: "text-emerald-700",
+  },
+  {
+    key: "all",
+    label: "Total",
+    icon: "dashboard",
+    chip: "bg-slate-100 text-slate-600 ring-slate-200",
+    activeRing: "ring-slate-400 bg-slate-50",
+    text: "text-slate-900",
+  },
+]
+
 const DAY_MS = 86400000
 
 // =========================
@@ -105,6 +141,24 @@ const matchesPeriod = (dateStr, period) => {
     default:
       return true
   }
+}
+
+// Decide which counter an activity belongs to.
+// "created" -> New lead, "assigned" -> Assigned,
+// "stage_change" -> Follow-up / New lead, based on the target stage in the description
+const classifyActivity = (activity) => {
+  if (activity.type === "created") return "new"
+  if (activity.type === "assigned") return "assigned"
+
+  if (activity.type === "stage_change") {
+    const match = (activity.description || "").match(/\sto\s+(.+)$/i)
+    const target = match?.[1]?.trim().toLowerCase()
+    if (target === "follow-up" || target === "follow_up") return "followup"
+    if (target === "new lead" || target === "discovery") return "new"
+    return "stage"
+  }
+
+  return "other"
 }
 
 // =========================
@@ -179,7 +233,9 @@ const LoadingState = () => (
 
 const StatCard = ({ label, value, icon, accent, helper, progress }) => (
   <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5">
-    <div className={`absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12] ${accent.glow}`} />
+    <div
+      className={`absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12] ${accent.glow}`}
+    />
 
     <div className="relative flex items-start justify-between">
       <span className="text-[13px] font-semibold text-slate-500">{label}</span>
@@ -205,6 +261,30 @@ const StatCard = ({ label, value, icon, accent, helper, progress }) => (
   </div>
 )
 
+const ActivityCounter = ({ config, count, active, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={`group flex flex-col items-start gap-2 rounded-xl border p-3 text-left transition hover:-translate-y-px hover:shadow-sm ${
+      active
+        ? `border-transparent ring-2 ${config.activeRing}`
+        : "border-slate-200 bg-white hover:border-slate-300"
+    }`}
+  >
+    <div className="flex w-full items-center justify-between">
+      <span className={`flex h-7 w-7 items-center justify-center rounded-lg ring-1 ${config.chip}`}>
+        <Icon name={config.icon} size={14} />
+      </span>
+      {active && <span className="h-1.5 w-1.5 rounded-full bg-slate-900/70" />}
+    </div>
+    <div>
+      <p className={`text-xl font-bold leading-none tabular-nums ${config.text}`}>{count}</p>
+      <p className="mt-1 text-[11px] font-medium text-slate-500">{config.label}</p>
+    </div>
+  </button>
+)
+
 // =========================
 // PAGE
 // =========================
@@ -216,6 +296,7 @@ export default function Dashboard() {
   const [teamMembers, setTeamMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [activityPeriod, setActivityPeriod] = useState("all")
+  const [activityKind, setActivityKind] = useState("all")
 
   useEffect(() => {
     let active = true
@@ -317,14 +398,33 @@ export default function Dashboard() {
     return workload
   }, [leads, tasks, teamMembers])
 
+  // Activities inside the selected date range, tagged with their counter type
+  const periodActivities = useMemo(
+    () =>
+      activities
+        .filter(
+          (a) =>
+            ["created", "stage_change", "assigned"].includes(a.type) &&
+            matchesPeriod(a.created_at, activityPeriod)
+        )
+        .map((a) => ({ ...a, kind: classifyActivity(a) })),
+    [activities, activityPeriod]
+  )
+
+  const activityCounts = useMemo(() => {
+    const counts = { all: periodActivities.length, new: 0, followup: 0, assigned: 0 }
+    periodActivities.forEach((a) => {
+      if (a.kind in counts) counts[a.kind] += 1
+    })
+    return counts
+  }, [periodActivities])
+
   const visibleActivities = useMemo(
     () =>
-      activities.filter(
-        (a) =>
-          ["created", "stage_change", "assigned"].includes(a.type) &&
-          matchesPeriod(a.created_at, activityPeriod)
-      ),
-    [activities, activityPeriod]
+      activityKind === "all"
+        ? periodActivities
+        : periodActivities.filter((a) => a.kind === activityKind),
+    [periodActivities, activityKind]
   )
 
   const maxWorkload = Math.max(1, ...[...memberWorkload.values()].map((w) => w.leads))
@@ -398,6 +498,14 @@ export default function Dashboard() {
     { to: "/pipeline", icon: "pipeline", title: "Open Pipeline", text: "Manage lead stages", accent: "bg-violet-50 text-violet-600" },
     { to: "/tasks", icon: "tasks", title: "View Tasks", text: "Check pending work", accent: "bg-amber-50 text-amber-600" },
   ]
+
+  const periodLabel = {
+    all: "Recent",
+    today: "Today",
+    yesterday: "Yesterday",
+    this_week: "This week",
+    last_week: "Last week",
+  }[activityPeriod]
 
   return (
     <div className="w-full space-y-6 text-slate-900">
@@ -618,12 +726,15 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <SectionCard
           title="Activity"
-          subtitle="New leads, stage changes and assignments"
+          subtitle="New leads, follow-ups and assignments"
           action={
             <select
               aria-label="Filter activity by date"
               value={activityPeriod}
-              onChange={(e) => setActivityPeriod(e.target.value)}
+              onChange={(e) => {
+                setActivityPeriod(e.target.value)
+                setActivityKind("all")
+              }}
               className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
             >
               <option value="all">Recent</option>
@@ -634,12 +745,36 @@ export default function Dashboard() {
             </select>
           }
         >
+          {/* COUNTERS */}
+          <div className="mb-4 grid grid-cols-2 gap-2.5">
+            {ACTIVITY_COUNTERS.map((counter) => (
+              <ActivityCounter
+                key={counter.key}
+                config={counter}
+                count={activityCounts[counter.key] ?? 0}
+                active={activityKind === counter.key}
+                onClick={() => setActivityKind(counter.key)}
+              />
+            ))}
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-50/80 px-3.5 py-2.5 text-[11px] text-slate-500">
+            <span>
+              {periodLabel}: <strong className="text-slate-700">{activityCounts.all}</strong> activities
+            </span>
+            <span>
+              Pipeline now:{" "}
+              <strong className="text-sky-700">{stageCounts.discovery}</strong> new ·{" "}
+              <strong className="text-amber-700">{stageCounts.follow_up}</strong> follow-up
+            </span>
+          </div>
+
           {visibleActivities.length === 0 ? (
-            <EmptyState icon="dashboard">No activity found for this period.</EmptyState>
+            <EmptyState icon="dashboard">No activity found for this filter.</EmptyState>
           ) : (
-            <ol className="relative flex flex-col gap-1">
+            <ol className="relative flex max-h-[420px] flex-col gap-1 overflow-y-auto pr-1">
               <span className="absolute bottom-3 left-[15px] top-3 w-px bg-slate-200" aria-hidden="true" />
-              {visibleActivities.slice(0, 8).map((activity) => (
+              {visibleActivities.slice(0, 30).map((activity) => (
                 <li key={activity.id} className="relative flex gap-3 rounded-xl py-2 pl-0 pr-1">
                   <div
                     className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${

@@ -19,22 +19,28 @@ function Stat({ label, value, icon, tone }) {
 export default function ManagerDashboard() {
   const [leads, setLeads] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [serviceScope, setServiceScope] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      supabase.from("clients").select("id,name,company,email,phone,stage,assigned_to,created_at,next_follow_up").order("created_at", { ascending: false }),
-      supabase.from("tasks").select("id,title,status,due_date,client_id,assigned_to").neq("status", "completed").order("due_date", { ascending: true }),
-    ]).then(([leadResult, taskResult]) => {
+    const loadDashboard = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const [leadResult, taskResult, profileResult] = await Promise.all([
+        supabase.from("clients").select("id,name,company,email,phone,stage,assigned_to,created_at,next_follow_up").order("created_at", { ascending: false }),
+        supabase.from("tasks").select("id,title,status,due_date,client_id,assigned_to").neq("status", "completed").order("due_date", { ascending: true }),
+        user ? supabase.from("profiles").select("manager_service").eq("id", user.id).single() : Promise.resolve({ data: null, error: null }),
+      ]);
       if (!active) return;
-      const failures = [leadResult.error, taskResult.error].filter(Boolean);
+      const failures = [leadResult.error, taskResult.error, profileResult.error].filter(Boolean);
       if (failures.length) setError(failures.map((item) => item.message).join(" "));
       setLeads(leadResult.data || []);
       setTasks(taskResult.data || []);
+      setServiceScope(profileResult.data?.manager_service || "");
       setLoading(false);
-    });
+    };
+    loadDashboard();
     return () => { active = false; };
   }, []);
 
@@ -43,12 +49,12 @@ export default function ManagerDashboard() {
 
   return <div className="space-y-6">
     <div className="flex flex-wrap items-end justify-between gap-4">
-      <div><p className="text-sm font-semibold text-indigo-600">Manager workspace</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Lead overview</h1><p className="mt-2 text-sm text-slate-500">Review every lead, follow up with clients, and move deals through the pipeline.</p></div>
+      <div><p className="text-sm font-semibold text-indigo-600">Manager workspace</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Service leads</h1><p className="mt-2 text-sm text-slate-500">Review and manage leads in your assigned service or source scope.</p><span className="mt-3 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Scope: {serviceScope || "Not configured — contact Admin"}</span></div>
       <Link to="/leads" className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white no-underline hover:bg-indigo-700"><Icon name="leads" size={16} /> Open leads</Link>
     </div>
     {error && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">Could not load manager data: {error}</div>}
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-      <Stat label="All leads" value={loading ? "—" : leads.length} icon="leads" tone="bg-indigo-50 text-indigo-600" />
+      <Stat label="Leads in scope" value={loading ? "—" : leads.length} icon="leads" tone="bg-indigo-50 text-indigo-600" />
       <Stat label="Open tasks" value={loading ? "—" : tasks.length} icon="tasks" tone="bg-amber-50 text-amber-600" />
       <Stat label="Follow-ups due" value={loading ? "—" : needsFollowUp} icon="bell" tone="bg-rose-50 text-rose-600" />
       <Stat label="Qualified" value={loading ? "—" : (stages.qualified || 0)} icon="pipeline" tone="bg-emerald-50 text-emerald-600" />

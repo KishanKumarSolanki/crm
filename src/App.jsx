@@ -10,7 +10,6 @@ const Pipeline = lazy(() => import("./pages/Pipeline"))
 const Tasks = lazy(() => import("./pages/Tasks"))
 const TeamMembers = lazy(() => import("./pages/TeamMembers"))
 const TeamMemberDetail = lazy(() => import("./pages/TeamMemberDetail"))
-const TeamMemberDashboard = lazy(() => import("./pages/TeamMemberDashboard"))
 const LandingPage = lazy(() => import("./pages/LandingPage"))
 const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
 
@@ -21,7 +20,6 @@ function LegacyLeadDetailRedirect() {
 
 import ProtectedRoute from "./components/ProtectedRoute"
 import AdminRoute from "./components/AdminRoute"
-import TeamMemberRoute from "./components/TeamMemberRoute"
 import RoleRoute from "./components/RoleRoute"
 import CRMLayout from "./components/CRMLayout"
 
@@ -64,7 +62,6 @@ function App() {
 
           <Route path="/manager-dashboard" element={<RoleRoute allowedRoles={["manager"]}><ManagerDashboard /></RoleRoute>} />
 
-          <Route path="/my-dashboard" element={<TeamMemberRoute><TeamMemberDashboard /></TeamMemberRoute>} />
           <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
 
 
@@ -80,7 +77,7 @@ function App() {
           {/* LEAD DETAIL */}
           <Route
             path="/lead/:id"
-            element={<RoleRoute allowedRoles={["admin", "manager", "staff", "team_member"]}><LeadDetail /></RoleRoute>}
+            element={<RoleRoute allowedRoles={["admin", "manager"]}><LeadDetail /></RoleRoute>}
           />
           <Route path="/client/:id" element={<LegacyLeadDetailRedirect />} />
 

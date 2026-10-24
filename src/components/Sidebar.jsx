@@ -4,7 +4,6 @@ import Icon from "./Icon";
 const menuItems = [
   { name: "Dashboard", path: "/", icon: "dashboard", adminOnly: true },
   { name: "Manager Dashboard", path: "/manager-dashboard", icon: "dashboard", managerOnly: true },
-  { name: "My Dashboard", path: "/my-dashboard", icon: "dashboard", memberOnly: true },
   { name: "Leads", path: "/leads", icon: "leads", adminOnly: true, managerAccess: true },
   { name: "Pipeline", path: "/pipeline", icon: "pipeline", adminOnly: true, managerAccess: true },
   { name: "Marketing", path: "/marketing", icon: "marketing", adminOnly: true },
@@ -12,14 +11,11 @@ const menuItems = [
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];
 
-const MEMBER_ROLES = ["staff", "team_member"];
-
 function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM User", role = "" }) {
   const visibleItems = menuItems.filter(
     (item) =>
       (!item.adminOnly || role === "admin" || (item.managerAccess && role === "manager")) &&
-      (!item.managerOnly || role === "manager") &&
-      (!item.memberOnly || MEMBER_ROLES.includes(role))
+      (!item.managerOnly || role === "manager")
   );
 
   const initials = userName

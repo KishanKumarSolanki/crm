@@ -25,6 +25,8 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
    - `20261024000000_igs_external_lead_id.sql` supports duplicate-safe enquiries from the IGS website.
    - `20261024100000_welcome_email_sent_at.sql` records one-time welcome email delivery.
    - `20261024110000_manager_role_access.sql` adds manager permissions and scopes team-member tasks.
+   - `20261024120000_daily_reports.sql` is retained for migration history because it was already applied remotely; the Daily Reports UI and routes have been removed.
+   - `20261024130000_admin_manager_service_scope.sql` limits sign-in to Admin and Manager and restricts each Manager to one lead service/source.
    - Review the access-control notes below before applying the migrations to an existing database.
 
 4. Start the development server:
@@ -48,7 +50,7 @@ Never put a Supabase service-role key in a `VITE_*` variable or browser code.
 
 ## Landing page, attribution, and Meta events
 
-- The public lead-capture page is `/landing`. It records first-touch UTM values and, after optional marketing consent, Meta click/browser identifiers. Leads are created through the `capture-lead` Supabase Edge Function so the public form does not need direct database insert access. Each lead also gets an activity, a next-day follow-up task and an optional project note. When a team member moves a lead into `Contacted`, configured EmailJS sends the welcome email once; the timestamp is stored on the lead.
+- The public lead-capture page is `/landing`. It records first-touch UTM values and, after optional marketing consent, Meta click/browser identifiers. Leads are created through the `capture-lead` Supabase Edge Function so the public form does not need direct database insert access. Each lead also gets an activity, a next-day follow-up task and an optional project note. When an admin or manager moves a lead into `Contacted`, configured EmailJS sends the welcome email once; the timestamp is stored on the lead.
 - The signed-in admin Marketing page is `/marketing`. Add ad spend by campaign and date there. Use the same campaign spelling in the landing link's `utm_campaign`; record each sale amount on that lead's detail page for revenue and ROAS.
 - The database trigger queues `Lead`, `QualifiedLead`, `Schedule`, and `Purchase` events when a lead gave marketing consent. Stage names are `qualified`, `meeting_booked`, and `signed` respectively. Browser Pixel and server CAPI share the lead event ID for deduplication.
 - Deploy both functions with the project: `supabase functions deploy capture-lead` and `supabase functions deploy process-meta-events`. The `supabase/config.toml` disables JWT verification only for the public capture function; it validates the request itself and checks the configured origin allowlist.
@@ -60,10 +62,11 @@ Never put a Supabase service-role key in a `VITE_*` variable or browser code.
 ## Access-control model
 
 - `admin` uses the full CRM, including marketing, team management, and account role assignment.
-- `manager` gets a manager dashboard and can view/update the shared lead queue, log lead notes/activity, and create or assign tasks. Managers cannot delete leads or change account roles.
-- `staff` and legacy `team_member` accounts use My Dashboard and can see/update tasks assigned to their linked team-member record. The account email must match a team-member email; the migration links them automatically.
-- After applying the migrations, create each login in Supabase Authentication. Sign in as an admin, open Team Members, and set the account's Login role to Manager or Team Member. Add a matching Team Member record for each staff login. Set the initial admin role in the `profiles` table through Supabase if one does not already exist.
-- Supabase RLS enforces the data access in addition to UI routes. Apply the new migration before using manager and member accounts.
+- `manager` gets a manager dashboard and can see/update leads matching their assigned service/source, log activity on those leads, and create or assign tasks linked to those leads. Managers cannot browse other services or change account roles.
+- `admin` has the full CRM and can set each manager's service scope from Team Members → Login roles. A lead matches a manager scope when its Service or Lead Source matches the configured value.
+- Only `admin` and `manager` profiles can sign in to a CRM dashboard. Team-member records remain available to admins/managers for task assignment; there is no Team Member dashboard.
+- Create/invite accounts in Supabase Authentication, then assign the Admin or Manager role from Team Members. The initial Admin role can be set in `profiles` through Supabase if needed.
+- Supabase RLS enforces the role and service restrictions in addition to UI routes. Apply the latest migration before using Manager accounts.
 - There is no organization/tenant column in the current app model, so this migration does not isolate multiple companies from each other. Do not use this policy set for a multi-tenant deployment without adding and enforcing tenant ownership.
 - The migration adds restrictive authentication/admin guards in addition to its permissive access policies. Review any existing policies and test with a regular account and an admin account in a non-production Supabase project before applying it to production.
 
