@@ -12,6 +12,8 @@ const TeamMembers = lazy(() => import("./pages/TeamMembers"))
 const TeamMemberDetail = lazy(() => import("./pages/TeamMemberDetail"))
 const LandingPage = lazy(() => import("./pages/LandingPage"))
 const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
+const Broadcasting = lazy(() => import("./pages/Broadcasting"))
+const Unsubscribe = lazy(() => import("./pages/Unsubscribe"))
 
 function LegacyLeadDetailRedirect() {
   const { id } = useParams()
@@ -40,6 +42,7 @@ function App() {
         />
 
         <Route path="/landing" element={<LandingPage />} />
+        <Route path="/unsubscribe" element={<Unsubscribe />} />
 
 
         {/* =========================
@@ -63,6 +66,7 @@ function App() {
           <Route path="/manager-dashboard" element={<RoleRoute allowedRoles={["manager"]}><ManagerDashboard /></RoleRoute>} />
 
           <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
+          <Route path="/broadcasting" element={<AdminRoute><Broadcasting /></AdminRoute>} />
 
 
           {/* LEADS */}
