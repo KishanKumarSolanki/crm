@@ -27,6 +27,8 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
    - `20261024110000_manager_role_access.sql` adds manager permissions and scopes team-member tasks.
    - `20261024120000_daily_reports.sql` is retained for migration history because it was already applied remotely; the Daily Reports UI and routes have been removed.
    - `20261024130000_admin_manager_service_scope.sql` limits sign-in to Admin and Manager and restricts each Manager to one lead service/source.
+   - `20261024140000_broadcasting.sql` adds channel consent fields, admin-only campaign/recipient logs, the atomic queue claim, and private campaign attachment storage.
+   - `20261024150000_emailjs_broadcast_rate_limit.sql` spaces EmailJS sends across concurrent queue workers.
    - Review the access-control notes below before applying the migrations to an existing database.
 
 4. Start the development server:
@@ -47,6 +49,75 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
 | `VITE_META_PIXEL_ID` | No | Browser Pixel ID. Pixel events run only after marketing consent. |
 
 Never put a Supabase service-role key in a `VITE_*` variable or browser code.
+
+## Broadcasting
+
+The admin-only `/broadcasting` panel provides email and WhatsApp campaign composition, recipient filters and preview, campaign drafts, scheduling, history, and delivery reports. It uses the existing `clients` and `team_members` data. Campaign content, recipient snapshots, provider IDs, attempts, and failure details are stored in `broadcast_campaigns` and `broadcast_recipients`; attachments use the private `broadcast-attachments` Storage bucket.
+
+Before using the panel:
+
+1. Apply `20261024140000_broadcasting.sql` and `20261024150000_emailjs_broadcast_rate_limit.sql` after the earlier migrations. The new channel consent fields default to `false`; these migrations do not infer channel permission from the older general `marketing_consent` field. An admin must record email or WhatsApp permission on each client detail page, based on consent the client actually gave. Email unsubscribe links turn off email eligibility immediately, including for already scheduled campaigns.
+2. Reuse the existing EmailJS template for both automatic welcome emails (when a client moves to `Contacted`) and broadcasts. In EmailJS, set **To Email** to `{{to_email}}`, **Subject** to `{{subject}}`, and the HTML body to `{{{message_html}}}`. The shared template can also use `{{lead_name}}`, `{{company_name}}`, `{{message_text}}`, or `{{unsubscribe_url}}`. The welcome automation supplies its own welcome subject and body; campaigns supply the composed content and unsubscribe footer.
+3. If email attachments are needed, add up to five **Form File Attachment** entries to the shared template with parameter names `broadcast_attachment_1` through `broadcast_attachment_5`. These names match the attachment fields sent by the queue worker.
+4. Set up a Meta WhatsApp Business Platform Cloud API phone number and a permanent access token with messaging permission. Configure approved message templates in Meta. WhatsApp contacts need an explicit opt-in, and the provider enforces template, conversation-window, quality, and messaging limits.
+5. Store these **Supabase Edge Function secrets** in the Supabase Dashboard under **Edge Function Secrets**, or with `supabase secrets set`. Do not add these values to frontend `.env` files or any `VITE_*` variable.
+
+| Secret | Required | Purpose |
+| --- | --- | --- |
+| `EMAILJS_SERVICE_ID` | Email | Existing EmailJS service ID |
+| `EMAILJS_TEMPLATE_ID` | Email | Existing shared welcome/broadcast EmailJS template ID |
+| `EMAILJS_PUBLIC_KEY` | Email | EmailJS public key used by the existing welcome automation |
+| `EMAILJS_PRIVATE_KEY` | No | Optional EmailJS private key, if enabled for your account |
+| `WHATSAPP_ACCESS_TOKEN` | WhatsApp | Meta access token with WhatsApp messaging permission |
+| `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp | Registered Cloud API phone number ID |
+| `WHATSAPP_GRAPH_API_VERSION` | WhatsApp | Graph API version enabled for your Meta app, e.g. `vXX.0` |
+| `WHATSAPP_APP_SECRET` | WhatsApp status callbacks | Meta app secret used to verify webhook signatures |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | WhatsApp webhook setup | A long random token you choose for webhook verification |
+| `BROADCAST_CRON_SECRET` | Scheduled campaigns | Long random secret sent by the scheduler to the queue worker |
+| `PUBLIC_SITE_URL` | Email unsubscribe | Public CRM origin used in unsubscribe links. This is also used by the existing Meta function. |
+| `PUBLIC_SITE_URLS` | No | Comma-separated allowed browser origins for the Edge Functions when they differ from `PUBLIC_SITE_URL` |
+
+Supabase supplies `SUPABASE_URL` and the server-side key to deployed Edge Functions. The service-role key must remain server-side.
+
+The worker spaces EmailJS requests at least 1.1 seconds apart across concurrent workers to respect its [documented one-request-per-second limit](https://www.emailjs.com/docs/rest-api/send/). It uses EmailJS's [multipart send endpoint](https://www.emailjs.com/docs/rest-api/send-form/) for campaign attachments. EmailJS acceptance is recorded as `sent`; this integration does not receive EmailJS delivery, bounce, open, or click callbacks, so email delivery analytics are not available in the panel. EmailJS does not provide an idempotency key here, so ambiguous timeout/server errors are not retried automatically; check the EmailJS dashboard history before retrying those messages. WhatsApp delivery/read statuses continue to come from Meta callbacks. The Campaign history tab has a **Process queue** action for queued work after the worker is deployed; the scheduled queue cron is still needed for automatic scheduling and retries.
+
+Deploy the worker and callback functions after setting secrets:
+
+```sh
+supabase functions deploy process-broadcast-queue
+supabase functions deploy unsubscribe-broadcast
+supabase functions deploy whatsapp-broadcast-webhook
+```
+
+Configure provider callbacks:
+
+- In the Meta app's WhatsApp webhook settings, use `https://<project-ref>.supabase.co/functions/v1/whatsapp-broadcast-webhook`, enter the same verify token as `WHATSAPP_WEBHOOK_VERIFY_TOKEN`, and subscribe to the `messages` field. The handler checks Meta's request signature with `WHATSAPP_APP_SECRET`.
+
+For scheduled campaigns and retries, enable Supabase's `pg_cron` and `pg_net` extensions. Store the project URL and the same random value used for `BROADCAST_CRON_SECRET` in Supabase Vault, then schedule a POST to `/functions/v1/process-broadcast-queue` every minute with header `x-internal-secret: <BROADCAST_CRON_SECRET>` and body `{"limit":25}`. In the SQL Editor, the setup has this shape (replace both placeholders with your project URL and generated secret):
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co', 'broadcast_project_url');
+select vault.create_secret('<same-value-as-BROADCAST_CRON_SECRET>', 'broadcast_cron_secret');
+
+select cron.schedule(
+  'process-broadcast-queue',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url := (select decrypted_secret from vault.decrypted_secrets where name = 'broadcast_project_url') || '/functions/v1/process-broadcast-queue',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-internal-secret', (select decrypted_secret from vault.decrypted_secrets where name = 'broadcast_cron_secret')
+    ),
+    body := '{"limit":25}'::jsonb
+  ) as request_id;
+  $$
+);
+```
+
+The worker claims rows atomically and retries transient provider errors up to three times. An admin's immediate send also invokes the worker; the cron job drains larger campaigns and runs due schedules. See [Supabase's Edge Function scheduling guide](https://supabase.com/docs/guides/functions/schedule-functions) for the Vault and `pg_net` setup.
+
+The composer limits uploads to 10 MB each (five files for email and one supported image, PDF, or MP4 for WhatsApp). The initial WhatsApp template editor sends text parameters for the approved template's body component. Verify the exact template name, language, and parameter order in Meta before sending.
 
 ## Landing page, attribution, and Meta events
 

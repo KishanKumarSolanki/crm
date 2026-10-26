@@ -1,5 +1,7 @@
 import emailjs from "@emailjs/browser"
 
+const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" })[character])
+
 export async function sendLeadWelcomeEmail({ email, name, company }) {
   const serviceId = import.meta.env.VITE_EMAILJS_SERVICE_ID
   const templateId = import.meta.env.VITE_EMAILJS_TEMPLATE_ID
@@ -11,14 +13,21 @@ export async function sendLeadWelcomeEmail({ email, name, company }) {
     )
   }
 
+  const recipientName = name || "there"
+  const companyName = company || "our team"
+  const messageText = `Hi ${recipientName},\n\nThank you for getting in touch with ${companyName}. Our team will follow up with you about your project soon.`
+
   return emailjs.send(
     serviceId,
     templateId,
     {
       to_email: email,
       lead_name: name,
-      company_name: company || "our team",
+      company_name: companyName,
       email,
+      subject: `Welcome to ${companyName}`,
+      message_text: messageText,
+      message_html: `<p>Hi ${escapeHtml(recipientName)},</p><p>Thank you for getting in touch with ${escapeHtml(companyName)}. Our team will follow up with you about your project soon.</p>`,
     },
     { publicKey }
   )

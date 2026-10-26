@@ -217,6 +217,8 @@ export default function LeadDetail() {
   const [savingConversation, setSavingConversation] = useState(false)
   const [revenueAmount, setRevenueAmount] = useState("")
   const [savingRevenue, setSavingRevenue] = useState(false)
+  const [savingConsent, setSavingConsent] = useState(false)
+  const [userRole, setUserRole] = useState("")
 
   // =========================
   // FETCH ALL DATA
@@ -275,6 +277,18 @@ export default function LeadDetail() {
   useEffect(() => {
     fetchAll()
   }, [id])
+
+  useEffect(() => {
+    let active = true
+    const loadRole = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
+      if (active) setUserRole(data?.role || "")
+    }
+    loadRole()
+    return () => { active = false }
+  }, [])
 
   // =========================
   // ACTIONS
@@ -362,6 +376,17 @@ export default function LeadDetail() {
       member ? `Lead assigned to ${member.name}` : "Lead unassigned"
     )
     fetchAll()
+  }
+
+  const updateConsent = async (field, enabled) => {
+    setSavingConsent(true)
+    const changes = field === "email_marketing_opt_in"
+      ? { email_marketing_opt_in: enabled, email_unsubscribed_at: enabled ? null : new Date().toISOString() }
+      : { whatsapp_opt_in: enabled }
+    const { error } = await supabase.from("clients").update(changes).eq("id", id)
+    if (error) alert(`Could not update messaging consent: ${error.message}`)
+    else setLead((current) => ({ ...current, ...changes }))
+    setSavingConsent(false)
   }
 
   const addNote = async (e) => {
@@ -642,6 +667,28 @@ export default function LeadDetail() {
           </div>
         </div>
       </section>
+
+      {userRole === "admin" && (
+        <section className={`${cardClass} mb-5 p-5 sm:p-6`}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[15px] font-bold tracking-tight text-slate-900">Messaging consent</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Record channel-specific marketing permission provided by this client. Email unsubscribe requests are always honored.</p>
+            </div>
+            {lead.email_unsubscribed_at && <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">Unsubscribed {formatDate(lead.email_unsubscribed_at)}</span>}
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3.5 transition hover:border-indigo-200 hover:bg-indigo-50/30">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={Boolean(lead.email_marketing_opt_in && !lead.email_unsubscribed_at)} disabled={savingConsent} onChange={(event) => updateConsent("email_marketing_opt_in", event.target.checked)} />
+              <span><strong className="block text-xs font-semibold text-slate-800">Email marketing</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Client has agreed to receive email campaigns.</span></span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3.5 transition hover:border-indigo-200 hover:bg-indigo-50/30">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={Boolean(lead.whatsapp_opt_in)} disabled={savingConsent} onChange={(event) => updateConsent("whatsapp_opt_in", event.target.checked)} />
+              <span><strong className="block text-xs font-semibold text-slate-800">WhatsApp messages</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Client has explicitly opted in on WhatsApp.</span></span>
+            </label>
+          </div>
+        </section>
+      )}
 
       {/* STATS */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">

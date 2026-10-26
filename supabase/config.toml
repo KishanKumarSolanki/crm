@@ -1,2 +1,14 @@
 [functions.capture-lead]
 verify_jwt = false
+
+# These handlers validate admin JWTs themselves; the internal-secret route is
+# also used by Supabase Cron for scheduled campaigns.
+[functions.process-broadcast-queue]
+verify_jwt = false
+
+# Public endpoints verify their own unsubscribe token or provider signature.
+[functions.unsubscribe-broadcast]
+verify_jwt = false
+
+[functions.whatsapp-broadcast-webhook]
+verify_jwt = false
