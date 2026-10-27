@@ -33,7 +33,6 @@ const AVATAR_TONES = [
 const ACTIVITY_TONES = {
   created: "bg-indigo-50 text-indigo-600 ring-indigo-100",
   stage_change: "bg-violet-50 text-violet-600 ring-violet-100",
-  assigned: "bg-emerald-50 text-emerald-600 ring-emerald-100",
   task_created: "bg-amber-50 text-amber-600 ring-amber-100",
   task_completed: "bg-emerald-50 text-emerald-600 ring-emerald-100",
   task_reopened: "bg-orange-50 text-orange-600 ring-orange-100",
@@ -45,7 +44,6 @@ const ACTIVITY_TONES = {
 const ACTIVITY_ICONS = {
   created: "plus",
   stage_change: "pipeline",
-  assigned: "team",
   task_created: "tasks",
   task_completed: "tasks",
   task_reopened: "tasks",
@@ -70,14 +68,6 @@ const ACTIVITY_COUNTERS = [
     chip: "bg-amber-50 text-amber-600 ring-amber-100",
     activeRing: "ring-amber-400 bg-amber-50/60",
     text: "text-amber-700",
-  },
-  {
-    key: "assigned",
-    label: "Assigned",
-    icon: "team",
-    chip: "bg-emerald-50 text-emerald-600 ring-emerald-100",
-    activeRing: "ring-emerald-400 bg-emerald-50/60",
-    text: "text-emerald-700",
   },
   {
     key: "all",
@@ -144,11 +134,10 @@ const matchesPeriod = (dateStr, period) => {
 }
 
 // Decide which counter an activity belongs to.
-// "created" -> New lead, "assigned" -> Assigned,
-// "stage_change" -> Follow-up / New lead, based on the target stage in the description
+// "created" -> New lead, "stage_change" -> Follow-up / New lead,
+// based on the target stage in the description
 const classifyActivity = (activity) => {
   if (activity.type === "created") return "new"
-  if (activity.type === "assigned") return "assigned"
 
   if (activity.type === "stage_change") {
     const match = (activity.description || "").match(/\sto\s+(.+)$/i)
@@ -293,7 +282,6 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([])
   const [tasks, setTasks] = useState([])
   const [activities, setActivities] = useState([])
-  const [teamMembers, setTeamMembers] = useState([])
   const [loading, setLoading] = useState(true)
   const [activityPeriod, setActivityPeriod] = useState("all")
   const [activityKind, setActivityKind] = useState("all")
@@ -304,23 +292,20 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       setLoading(true)
 
-      const [leadsResult, tasksResult, activitiesResult, membersResult] = await Promise.all([
+      const [leadsResult, tasksResult, activitiesResult] = await Promise.all([
         supabase.from("clients").select("*").order("created_at", { ascending: false }),
         supabase.from("tasks").select("*").order("due_date", { ascending: true }),
         supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(100),
-        supabase.from("team_members").select("*").eq("status", "active").order("name", { ascending: true }),
       ])
 
       if (leadsResult.error) console.error("Leads:", leadsResult.error)
       if (tasksResult.error) console.error("Tasks:", tasksResult.error)
       if (activitiesResult.error) console.error("Activities:", activitiesResult.error)
-      if (membersResult.error) console.error("Team Members:", membersResult.error)
 
       if (!active) return
       setLeads(leadsResult.data || [])
       setTasks(tasksResult.data || [])
       setActivities(activitiesResult.data || [])
-      setTeamMembers(membersResult.data || [])
       setLoading(false)
     }
 
@@ -372,39 +357,13 @@ export default function Dashboard() {
     [leads]
   )
 
-  const memberById = useMemo(
-    () => new Map(teamMembers.map((m) => [String(m.id), m])),
-    [teamMembers]
-  )
-
-  const memberWorkload = useMemo(() => {
-    const openTasksByClient = new Map()
-    tasks.forEach((task) => {
-      if (task.status === "completed") return
-      const key = String(task.client_id)
-      openTasksByClient.set(key, (openTasksByClient.get(key) || 0) + 1)
-    })
-
-    const workload = new Map()
-    teamMembers.forEach((member) => workload.set(String(member.id), { leads: 0, tasks: 0 }))
-
-    leads.forEach((lead) => {
-      const entry = workload.get(String(lead.assigned_to))
-      if (!entry) return
-      entry.leads += 1
-      entry.tasks += openTasksByClient.get(String(lead.id)) || 0
-    })
-
-    return workload
-  }, [leads, tasks, teamMembers])
-
   // Activities inside the selected date range, tagged with their counter type
   const periodActivities = useMemo(
     () =>
       activities
         .filter(
           (a) =>
-            ["created", "stage_change", "assigned"].includes(a.type) &&
+            ["created", "stage_change"].includes(a.type) &&
             matchesPeriod(a.created_at, activityPeriod)
         )
         .map((a) => ({ ...a, kind: classifyActivity(a) })),
@@ -412,7 +371,7 @@ export default function Dashboard() {
   )
 
   const activityCounts = useMemo(() => {
-    const counts = { all: periodActivities.length, new: 0, followup: 0, assigned: 0 }
+    const counts = { all: periodActivities.length, new: 0, followup: 0 }
     periodActivities.forEach((a) => {
       if (a.kind in counts) counts[a.kind] += 1
     })
@@ -427,7 +386,6 @@ export default function Dashboard() {
     [periodActivities, activityKind]
   )
 
-  const maxWorkload = Math.max(1, ...[...memberWorkload.values()].map((w) => w.leads))
 
   // =========================
   // RENDER
@@ -564,7 +522,6 @@ export default function Dashboard() {
           ) : (
             <div className="-mx-2 flex flex-col">
               {followUpQueue.slice(0, 6).map((lead) => {
-                const member = memberById.get(String(lead.assigned_to))
                 const overdue = isOverdue(lead.next_follow_up)
                 const dueLabel = lead.next_follow_up ? formatDateTime(lead.next_follow_up) : "Follow-up needed"
 
@@ -579,8 +536,7 @@ export default function Dashboard() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-slate-900">{lead.name}</p>
                       <p className="truncate text-xs text-slate-500">
-                        {member?.name || "Unassigned"}
-                        {lead.service_name ? ` · ${lead.service_name}` : ""}
+                        {[lead.company, lead.service_name, lead.lead_source].filter(Boolean).join(" · ") || "No company or service details"}
                       </p>
                     </div>
 
@@ -626,9 +582,8 @@ export default function Dashboard() {
       </div>
 
       {/* PIPELINE + TEAM */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-5">
         <SectionCard
-          className="xl:col-span-2"
           title="Lead Pipeline"
           subtitle="Distribution of your leads across stages"
           action={<ActionLink to="/pipeline">View pipeline →</ActionLink>}
@@ -676,57 +631,13 @@ export default function Dashboard() {
           )}
         </SectionCard>
 
-        <SectionCard
-          title="Team Workload"
-          subtitle="Assigned leads and open tasks"
-          action={<ActionLink to="/team-members">View team →</ActionLink>}
-        >
-          {teamMembers.length === 0 ? (
-            <EmptyState icon="team">No active team members.</EmptyState>
-          ) : (
-            <div className="flex flex-col gap-1">
-              {teamMembers.slice(0, 5).map((member) => {
-                const load = memberWorkload.get(String(member.id)) || { leads: 0, tasks: 0 }
-                return (
-                  <Link
-                    key={member.id}
-                    to={`/team-member/${member.id}`}
-                    className="group rounded-xl px-2.5 py-3 text-inherit no-underline transition hover:bg-slate-50"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar name={member.name} seed={member.id} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-900">{member.name}</p>
-                        <p className="truncate text-xs text-slate-400">{member.designation || "Team Member"}</p>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1.5">
-                        <span className="rounded-md bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700">
-                          {load.leads} leads
-                        </span>
-                        <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
-                          {load.tasks} tasks
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 transition-all duration-700"
-                        style={{ width: `${pct(load.leads, maxWorkload)}%` }}
-                      />
-                    </div>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </SectionCard>
       </div>
 
       {/* ACTIVITY + RECENT LEADS */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <SectionCard
           title="Activity"
-          subtitle="New leads, follow-ups and assignments"
+          subtitle="New leads and stage changes"
           action={
             <select
               aria-label="Filter activity by date"
@@ -804,7 +715,6 @@ export default function Dashboard() {
           ) : (
             <div className="-mx-2 flex flex-col">
               {leads.slice(0, 5).map((lead) => {
-                const assignee = memberById.get(String(lead.assigned_to))
                 return (
                   <Link
                     key={lead.id}
@@ -821,17 +731,6 @@ export default function Dashboard() {
                     <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 md:inline-flex">
                       {STAGE_LABEL[lead.stage] || (lead.stage ? lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1) : "Unknown")}
                     </span>
-
-                    <div className="hidden w-[130px] shrink-0 items-center gap-2 lg:flex">
-                      {assignee ? (
-                        <>
-                          <Avatar name={assignee.name} seed={assignee.id} size="sm" />
-                          <span className="truncate text-xs text-slate-500">{assignee.name}</span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-slate-400">Unassigned</span>
-                      )}
-                    </div>
 
                     <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
                   </Link>

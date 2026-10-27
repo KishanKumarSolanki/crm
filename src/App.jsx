@@ -9,7 +9,6 @@ const LeadDetail = lazy(() => import("./pages/LeadDetail"))
 const Pipeline = lazy(() => import("./pages/Pipeline"))
 const Tasks = lazy(() => import("./pages/Tasks"))
 const TeamMembers = lazy(() => import("./pages/TeamMembers"))
-const TeamMemberDetail = lazy(() => import("./pages/TeamMemberDetail"))
 const LandingPage = lazy(() => import("./pages/LandingPage"))
 const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
 const Broadcasting = lazy(() => import("./pages/Broadcasting"))
@@ -112,15 +111,6 @@ function App() {
 
 
           {/* TEAM MEMBER DETAIL */}
-          <Route
-            path="/team-member/:id"
-            element={
-              <AdminRoute>
-                <TeamMemberDetail />
-              </AdminRoute>
-            }
-          />
-
         </Route>
 
       </Routes>

@@ -171,7 +171,6 @@ const InputWithIcon = ({ icon, className = "", ...props }) => (
 
 export default function Leads() {
   const [leads, setLeads] = useState([])
-  const [teamMembers, setTeamMembers] = useState([])
   const [role, setRole] = useState("")
 
   const [name, setName] = useState("")
@@ -180,7 +179,6 @@ export default function Leads() {
   const [company, setCompany] = useState("")
   const [serviceName, setServiceName] = useState("")
   const [leadSource, setLeadSource] = useState("")
-  const [assignedTo, setAssignedTo] = useState("")
   const [nextFollowUp, setNextFollowUp] = useState("")
 
   const [loading, setLoading] = useState(false)
@@ -209,19 +207,13 @@ export default function Leads() {
 
   const loadLeadRecords = useCallback(
     () =>
-      Promise.all([
-        supabase.from("clients").select("*").order("created_at", { ascending: false }),
-        supabase.from("team_members").select("id, name, status").order("name", { ascending: true }),
-      ]),
+      supabase.from("clients").select("*").order("created_at", { ascending: false }),
     []
   )
 
-  const applyLeadRecords = useCallback(([leadsResult, membersResult]) => {
+  const applyLeadRecords = useCallback((leadsResult) => {
     if (leadsResult.error) console.error("Lead fetch error:", leadsResult.error)
     else setLeads(leadsResult.data || [])
-
-    if (membersResult.error) console.error("Team member fetch error:", membersResult.error)
-    else setTeamMembers(membersResult.data || [])
   }, [])
 
   const fetchLeads = useCallback(async () => {
@@ -254,7 +246,6 @@ export default function Leads() {
     setCompany("")
     setServiceName("")
     setLeadSource("")
-    setAssignedTo("")
     setNextFollowUp("")
   }
 
@@ -267,8 +258,6 @@ export default function Leads() {
     setLoading(true)
 
     try {
-      const assignedMember = teamMembers.find((member) => String(member.id) === assignedTo)
-
       const initialFollowUp = nextFollowUp
         ? new Date(nextFollowUp).toISOString()
         : new Date(Date.now() + DAY_MS).toISOString()
@@ -283,7 +272,6 @@ export default function Leads() {
             company: company.trim(),
             service_name: serviceName.trim(),
             lead_source: leadSource.trim(),
-            assigned_to: assignedMember?.id || null,
             next_follow_up: initialFollowUp,
             stage: "discovery",
           },
@@ -299,7 +287,6 @@ export default function Leads() {
           client_id: newLead.id,
           title: "Follow up with lead",
           due_date: initialFollowUp,
-          assigned_to: assignedMember?.id || null,
           status: "pending",
         },
       ])
@@ -309,9 +296,7 @@ export default function Leads() {
         {
           client_id: newLead.id,
           type: "created",
-          description: assignedMember
-            ? `Lead created and assigned to ${assignedMember.name}`
-            : "Lead created without an assignee",
+          description: "Lead created",
         },
       ])
       if (activityError) console.error("Activity error:", activityError)
@@ -369,9 +354,6 @@ export default function Leads() {
         leads.map((lead) => lead.email?.trim().toLowerCase()).filter(Boolean)
       )
       const workbookEmails = new Set()
-      const assignedMemberName =
-        teamMembers.find((member) => String(member.id) === assignedTo)?.name || "a team member"
-
       let added = 0
       let skipped = 0
       let failed = 0
@@ -398,7 +380,6 @@ export default function Leads() {
               name: row.name,
               email: row.email,
               company: row.company,
-              assigned_to: assignedTo || null,
               stage: "discovery",
             })
             .select()
@@ -420,9 +401,7 @@ export default function Leads() {
           const { error: activityError } = await supabase.from("activities").insert({
             client_id: newLead.id,
             type: "created",
-            description: assignedTo
-              ? `Lead imported and assigned to ${assignedMemberName}`
-              : "Lead imported without an assignee",
+            description: "Lead imported",
           })
           if (activityError) console.error("Imported lead activity error:", activityError)
         } catch (error) {
@@ -528,7 +507,7 @@ export default function Leads() {
 
     const columns = [
       "Lead Name", "Phone Number", "Email", "Company", "Service", "Lead Source",
-      "Assigned To", "Pipeline Stage", "Last Conversation", "Last Discussion",
+      "Pipeline Stage", "Last Conversation", "Last Discussion",
       "Next Follow-up", "Task Status",
     ]
 
@@ -541,7 +520,6 @@ export default function Leads() {
         lead.company,
         lead.service_name,
         lead.lead_source,
-        getMemberName(lead.assigned_to),
         formatStage(lead.stage),
         conversation?.created_at ? new Date(conversation.created_at).toLocaleString() : "",
         conversation?.description,
@@ -562,21 +540,6 @@ export default function Leads() {
   // =========================
   // DERIVED DATA
   // =========================
-
-  const memberById = useMemo(
-    () => new Map(teamMembers.map((m) => [String(m.id), m])),
-    [teamMembers]
-  )
-
-  const getMemberName = useCallback(
-    (memberId) => memberById.get(String(memberId))?.name || "Unassigned",
-    [memberById]
-  )
-
-  const activeMembers = useMemo(
-    () => teamMembers.filter((m) => m.status === "active"),
-    [teamMembers]
-  )
 
   const categoryCounts = useMemo(
     () => ({
@@ -760,23 +723,6 @@ export default function Leads() {
           </div>
 
           <div>
-            <label className={labelClass} htmlFor="lead-assignee">Assign to</label>
-            <select
-              id="lead-assignee"
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className={`${inputClass} cursor-pointer`}
-            >
-              <option value="">Unassigned</option>
-              {activeMembers.map((member) => (
-                <option key={member.id} value={member.id}>
-                  {member.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
             <label className={labelClass} htmlFor="lead-followup">Next follow-up</label>
             <input
               id="lead-followup"
@@ -910,10 +856,10 @@ export default function Leads() {
 
         {/* Table */}
         <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[980px] border-collapse">
+          <table className="w-full min-w-[900px] border-collapse">
             <thead>
               <tr className="bg-slate-50/70">
-                {["Lead", "Company", "Service", "Phone", "Next follow-up", "Stage", "Assigned to", "Email", ""].map((h, i) => (
+                {["Lead", "Company", "Service", "Phone", "Next follow-up", "Stage", "Email", ""].map((h, i) => (
                   <th
                     key={h + i}
                     className="whitespace-nowrap border-b border-slate-100 px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400"
@@ -927,7 +873,7 @@ export default function Leads() {
             <tbody>
               {filteredLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={8}>
                     <div className="flex flex-col items-center gap-2 px-5 py-16 text-center">
                       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400">
                         <Icon name="leads" size={20} />
@@ -946,8 +892,6 @@ export default function Leads() {
               ) : (
                 visibleLeads.map((lead) => {
                   const style = STAGE_STYLES[lead.stage] || STAGE_STYLES.default
-                  const memberName = getMemberName(lead.assigned_to)
-                  const assigned = memberName !== "Unassigned"
 
                   return (
                     <tr key={lead.id} className="group transition-colors hover:bg-slate-50/70">
@@ -989,17 +933,6 @@ export default function Leads() {
                           <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                           {formatStage(lead.stage)}
                         </span>
-                      </td>
-
-                      <td className="border-b border-slate-100 px-5 py-3.5">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ${toneFor(lead.assigned_to)} text-[11px] font-bold text-white`}>
-                            {initialOf(memberName)}
-                          </div>
-                          <span className={`text-[13px] font-medium ${assigned ? "text-slate-700" : "text-slate-400"}`}>
-                            {memberName}
-                          </span>
-                        </div>
                       </td>
 
                       <td className="border-b border-slate-100 px-5 py-3.5">

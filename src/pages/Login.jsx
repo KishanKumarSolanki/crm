@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabase";
 
 const features = [
   "Keep every lead organized in one place.",
-  "Assign follow-ups and stay aligned as a team.",
+  "Track follow-ups and stay aligned as a team.",
   "Track every opportunity from first contact to close.",
 ];
 

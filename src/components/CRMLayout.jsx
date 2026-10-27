@@ -147,7 +147,6 @@ function CRMLayout() {
     if (path === "/tasks") return "Tasks";
     if (path === "/team-members") return "Team Members";
     if (path.startsWith("/lead/")) return "Lead Details";
-    if (path.startsWith("/team-member/")) return "Team Member";
     return "CRM";
   };
 

@@ -56,7 +56,6 @@ const AVATAR_TONES = [
 const ACTIVITY_TONES = {
   created: "bg-indigo-50 text-indigo-600 ring-indigo-100",
   stage_change: "bg-violet-50 text-violet-600 ring-violet-100",
-  assigned: "bg-emerald-50 text-emerald-600 ring-emerald-100",
   task: "bg-amber-50 text-amber-600 ring-amber-100",
   conversation: "bg-sky-50 text-sky-600 ring-sky-100",
   note: "bg-sky-50 text-sky-600 ring-sky-100",
@@ -66,7 +65,6 @@ const ACTIVITY_TONES = {
 const ACTIVITY_ICONS = {
   created: "plus",
   stage_change: "pipeline",
-  assigned: "team",
   task: "tasks",
   conversation: "leads",
   note: "leads",
@@ -201,7 +199,6 @@ export default function LeadDetail() {
   const { id } = useParams()
 
   const [lead, setLead] = useState(null)
-  const [teamMembers, setTeamMembers] = useState([])
   const [tasks, setTasks] = useState([])
   const [activities, setActivities] = useState([])
   const [notes, setNotes] = useState([])
@@ -241,13 +238,7 @@ export default function LeadDetail() {
     setLead(leadData)
     setRevenueAmount(leadData.revenue_amount ?? "")
 
-    const [membersRes, tasksRes, activitiesRes, notesRes] = await Promise.all([
-      supabase
-        .from("team_members")
-        .select("id, name, designation, status")
-        .eq("status", "active")
-        .order("name", { ascending: true }),
-
+    const [tasksRes, activitiesRes, notesRes] = await Promise.all([
       supabase
         .from("tasks")
         .select("*")
@@ -267,7 +258,6 @@ export default function LeadDetail() {
         .order("created_at", { ascending: false }),
     ])
 
-    setTeamMembers(membersRes.data || [])
     setTasks(tasksRes.data || [])
     setActivities(activitiesRes.data || [])
     setNotes(notesRes.data || [])
@@ -359,25 +349,6 @@ export default function LeadDetail() {
     setSavingRevenue(false)
   }
 
-  const updateAssignee = async (memberId) => {
-    const { error } = await supabase
-      .from("clients")
-      .update({ assigned_to: memberId || null })
-      .eq("id", id)
-
-    if (error) {
-      alert(error.message)
-      return
-    }
-
-    const member = teamMembers.find((m) => m.id === memberId)
-    await logActivity(
-      "assigned",
-      member ? `Lead assigned to ${member.name}` : "Lead unassigned"
-    )
-    fetchAll()
-  }
-
   const updateConsent = async (field, enabled) => {
     setSavingConsent(true)
     const changes = field === "email_marketing_opt_in"
@@ -461,7 +432,6 @@ export default function LeadDetail() {
           client_id: id,
           title: `Follow up with ${lead.name}`,
           due_date: followUpAt,
-          assigned_to: lead.assigned_to || null,
           status: "pending",
           priority: "normal",
           instructions: conversationOutcome.trim() || null,
@@ -494,11 +464,6 @@ export default function LeadDetail() {
   // =========================
   // DERIVED DATA
   // =========================
-
-  const assignee = useMemo(
-    () => teamMembers.find((m) => String(m.id) === String(lead?.assigned_to)),
-    [teamMembers, lead]
-  )
 
   const pendingTasks = useMemo(
     () => tasks.filter((t) => t.status !== "completed"),
@@ -559,13 +524,6 @@ export default function LeadDetail() {
       value: activities.length,
       icon: "pipeline",
       chip: "bg-emerald-50 text-emerald-600 ring-emerald-100",
-    },
-    {
-      label: "Account Manager",
-      value: assignee?.name || "Unassigned",
-      icon: "team",
-      chip: "bg-indigo-50 text-indigo-600 ring-indigo-100",
-      isText: true,
     },
   ]
 
@@ -648,22 +606,6 @@ export default function LeadDetail() {
               </select>
             </div>
 
-            <div>
-              <label className={labelClass} htmlFor="lead-assignee">Assigned to</label>
-              <select
-                id="lead-assignee"
-                className={`${inputClass} cursor-pointer`}
-                value={lead.assigned_to || ""}
-                onChange={(e) => updateAssignee(e.target.value)}
-              >
-                <option value="">Unassigned</option>
-                {teamMembers.map((member) => (
-                  <option key={member.id} value={member.id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </div>
           </div>
         </div>
       </section>
@@ -691,7 +633,7 @@ export default function LeadDetail() {
       )}
 
       {/* STATS */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {statCards.map((item) => (
           <StatCard key={item.label} {...item} />
         ))}

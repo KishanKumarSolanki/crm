@@ -13,7 +13,6 @@ const dateInputValue = (value) => {
 export default function Tasks() {
   const [tasks, setTasks] = useState([]);
   const [leads, setLeads] = useState([]);
-  const [teamMembers, setTeamMembers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
@@ -21,7 +20,6 @@ export default function Tasks() {
   const [title, setTitle] = useState("");
   const [leadId, setLeadId] = useState("");
   const [dueDate, setDueDate] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState("normal");
   const [instructions, setInstructions] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -36,14 +34,9 @@ export default function Tasks() {
         .from("clients")
         .select("id, name, company")
         .order("name", { ascending: true }),
-      supabase
-        .from("team_members")
-        .select("id, name")
-        .eq("status", "active")
-        .order("name", { ascending: true }),
     ]), []);
 
-  const applyTaskRecords = useCallback(([tasksResult, leadsResult, membersResult]) => {
+  const applyTaskRecords = useCallback(([tasksResult, leadsResult]) => {
     if (tasksResult.error) {
       setError(`Could not load tasks: ${tasksResult.error.message}`);
     } else {
@@ -58,16 +51,6 @@ export default function Tasks() {
       );
     } else {
       setLeads(leadsResult.data || []);
-    }
-
-    if (membersResult.error) {
-      setError((current) =>
-        [current, `Could not load team members: ${membersResult.error.message}`]
-          .filter(Boolean)
-          .join(" ")
-      );
-    } else {
-      setTeamMembers(membersResult.data || []);
     }
 
     setLoading(false);
@@ -101,7 +84,6 @@ export default function Tasks() {
     setTitle("");
     setLeadId("");
     setDueDate("");
-    setAssignedTo("");
     setPriority("normal");
     setInstructions("");
   };
@@ -119,7 +101,6 @@ export default function Tasks() {
       title: title.trim(),
       client_id: leadId,
       due_date: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
-      assigned_to: assignedTo || null,
       priority,
       instructions: instructions.trim() || null,
     };
@@ -136,8 +117,8 @@ export default function Tasks() {
 
     const { error: activityError } = await supabase.from("activities").insert({
       client_id: leadId,
-      type: editingId ? "task_updated" : "task_assigned",
-      description: `${editingId ? "Updated" : "Assigned"} task: ${title.trim()}${assignedTo ? ` (${teamMembers.find((member) => String(member.id) === assignedTo)?.name || "team member"})` : ""}`,
+      type: editingId ? "task_updated" : "task_created",
+      description: `${editingId ? "Updated" : "Created"} task: ${title.trim()}`,
     });
     if (activityError) setError(`Task saved, but its activity could not be recorded: ${activityError.message}`);
 
@@ -151,7 +132,6 @@ export default function Tasks() {
     setTitle(task.title || "");
     setLeadId(task.client_id ? String(task.client_id) : "");
     setDueDate(dateInputValue(task.due_date));
-    setAssignedTo(task.assigned_to ? String(task.assigned_to) : "");
     setPriority(task.priority || "normal");
     setInstructions(task.instructions || "");
     setError("");
@@ -215,7 +195,6 @@ export default function Tasks() {
   const completedCount = tasks.filter((task) => task.status?.toLowerCase() === "completed").length;
   const pendingCount = tasks.length - completedCount;
   const leadById = new Map(leads.map((lead) => [String(lead.id), lead]));
-  const memberById = new Map(teamMembers.map((member) => [String(member.id), member]));
 
   const formatDate = (value) => {
     if (!value) return "No due date";
@@ -233,7 +212,7 @@ export default function Tasks() {
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">CRM Management</p>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tasks & Follow-ups</h1>
-          <p className="mt-2 text-sm text-slate-500">Assign follow-ups to leads and team members, set priorities, and track completion.</p>
+          <p className="mt-2 text-sm text-slate-500">Create follow-ups for leads, set priorities, and track completion.</p>
         </div>
         <button
           type="button"
@@ -263,7 +242,7 @@ export default function Tasks() {
 
       <form onSubmit={saveTask} className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="mb-4 text-base font-bold">{editingId ? "Edit Task" : "Create Task"}</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1fr_1fr_0.9fr_auto_auto]">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1fr_0.9fr_auto_auto]">
           <label className="text-xs font-semibold text-slate-600">
             Task title
             <input
@@ -289,15 +268,6 @@ export default function Tasks() {
             <input className={`${inputClass} mt-1.5`} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
           </label>
           <label className="text-xs font-semibold text-slate-600">
-            Assignee
-            <select className={`${inputClass} mt-1.5`} value={assignedTo} onChange={(event) => setAssignedTo(event.target.value)}>
-              <option value="">Unassigned</option>
-              {teamMembers.map((member) => (
-                <option key={member.id} value={member.id}>{member.name}</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-xs font-semibold text-slate-600">
             Priority
             <select className={`${inputClass} mt-1.5 capitalize`} value={priority} onChange={(event) => setPriority(event.target.value)}>
               {["low", "normal", "high", "urgent"].map((value) => (
@@ -307,7 +277,7 @@ export default function Tasks() {
           </label>
           <label className="text-xs font-semibold text-slate-600 md:col-span-2 xl:col-span-2">
             Instructions
-            <textarea className={`${inputClass} mt-1.5 h-10 min-h-10 py-2`} value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={2000} placeholder="Add context for the assigned team member" />
+            <textarea className={`${inputClass} mt-1.5 h-10 min-h-10 py-2`} value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={2000} placeholder="Add task context" />
           </label>
           <button
             type="submit"
@@ -362,7 +332,6 @@ export default function Tasks() {
                     </h3>
                     <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
                       {linkedLead ? <Link to={`/lead/${linkedLead.id}`} className="text-indigo-600 hover:underline">{linkedLead.name}</Link> : <span>Lead unavailable</span>}
-                      <span>{memberById.get(String(task.assigned_to))?.name || "Unassigned"}</span>
                       <span className={overdue ? "font-semibold text-red-600" : ""}>{overdue ? "Overdue · " : "Due · "}{formatDate(task.due_date)}</span>
                     </div>
                     {task.instructions && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">{task.instructions}</p>}

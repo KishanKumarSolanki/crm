@@ -19,8 +19,8 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
 
 3. Apply the migrations in `supabase/migrations/` in filename order using the Supabase CLI or SQL Editor:
    - `20261019000000_crm_access_policies.sql` assumes `profiles.id` matches `auth.users.id` and `profiles.role` contains `admin` for administrators.
-   - `20261019000001_task_assignment_priority.sql` adds task assignee and priority fields used by task management.
-   - `20261022000000_client_follow_up_workflow.sql` adds lead follow-up and staff assignment workflows.
+   - `20261019000001_task_assignment_priority.sql` adds task priority and legacy assignment fields retained for database compatibility.
+   - `20261022000000_client_follow_up_workflow.sql` adds lead follow-up fields and workflow policies.
    - `20261023000000_marketing_attribution_meta.sql` adds UTM attribution, revenue, campaign spend and the Meta event outbox.
    - `20261024000000_igs_external_lead_id.sql` supports duplicate-safe enquiries from the IGS website.
    - `20261024100000_welcome_email_sent_at.sql` records one-time welcome email delivery.
@@ -133,9 +133,9 @@ The composer limits uploads to 10 MB each (five files for email and one supporte
 ## Access-control model
 
 - `admin` uses the full CRM, including marketing, team management, and account role assignment.
-- `manager` gets a manager dashboard and can see/update leads matching their assigned service/source, log activity on those leads, and create or assign tasks linked to those leads. Managers cannot browse other services or change account roles.
+- `manager` gets a manager dashboard and can see/update leads matching their configured service/source, log activity on those leads, and create or update tasks linked to those leads. Managers cannot browse other services or change account roles.
 - `admin` has the full CRM and can set each manager's service scope from Team Members → Login roles. A lead matches a manager scope when its Service or Lead Source matches the configured value.
-- Only `admin` and `manager` profiles can sign in to a CRM dashboard. Team-member records remain available to admins/managers for task assignment; there is no Team Member dashboard.
+- Only `admin` and `manager` profiles can sign in to a CRM dashboard. Team-member records are managed separately from lead and task ownership; there is no Team Member dashboard.
 - Create/invite accounts in Supabase Authentication, then assign the Admin or Manager role from Team Members. The initial Admin role can be set in `profiles` through Supabase if needed.
 - Supabase RLS enforces the role and service restrictions in addition to UI routes. Apply the latest migration before using Manager accounts.
 - There is no organization/tenant column in the current app model, so this migration does not isolate multiple companies from each other. Do not use this policy set for a multi-tenant deployment without adding and enforcing tenant ownership.

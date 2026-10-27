@@ -88,12 +88,11 @@ function MetricCard({ label, value, detail, icon, tone = "indigo" }) {
 function Broadcasting() {
   const [activeTab, setActiveTab] = useState("email")
   const [clients, setClients] = useState([])
-  const [members, setMembers] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [recipientStats, setRecipientStats] = useState([])
   const [selectedRecipients, setSelectedRecipients] = useState([])
   const [visibleClientCount, setVisibleClientCount] = useState(100)
-  const [filters, setFilters] = useState({ search: "", stage: "all", assignee: "all", service: "all" })
+  const [filters, setFilters] = useState({ search: "", stage: "all", service: "all" })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -123,16 +122,14 @@ function Broadcasting() {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError("")
-    const [clientResult, memberResult, campaignResult, recipientResult] = await Promise.all([
-      loadAllRows("clients", "id, name, email, phone, company, stage, service_name, assigned_to, email_marketing_opt_in, email_unsubscribed_at, whatsapp_opt_in, created_at", "created_at"),
-      loadAllRows("team_members", "id, name", "name"),
+    const [clientResult, campaignResult, recipientResult] = await Promise.all([
+      loadAllRows("clients", "id, name, email, phone, company, stage, service_name, email_marketing_opt_in, email_unsubscribed_at, whatsapp_opt_in, created_at", "created_at"),
       loadAllRows("broadcast_campaigns", "id, name, channel, status, subject, body_html, body_text, message_kind, template_name, template_language, template_parameters, filters, attachment_paths, recipient_count, scheduled_at, created_at, completed_at, dedupe_key", "created_at"),
       loadAllRows("broadcast_recipients", "campaign_id, status, email_opened_at, email_clicked_at, created_at", "created_at"),
     ])
-    const failure = [clientResult.error, memberResult.error, campaignResult.error, recipientResult.error].find(Boolean)
+    const failure = [clientResult.error, campaignResult.error, recipientResult.error].find(Boolean)
     if (failure) setError(failure.message)
     setClients(clientResult.data || [])
-    setMembers(memberResult.data || [])
     setCampaigns(campaignResult.data || [])
     setRecipientStats(recipientResult.data || [])
     setLoading(false)
@@ -166,8 +163,7 @@ function Broadcasting() {
       const searchMatch = !query || [client.name, client.email, client.phone, client.company].some((value) => String(value || "").toLowerCase().includes(query))
       return searchMatch
         && (filters.stage === "all" || client.stage === filters.stage)
-        && (filters.assignee === "all" || String(client.assigned_to || "") === filters.assignee)
-        && (filters.service === "all" || (client.service_name || "Unassigned") === filters.service)
+        && (filters.service === "all" || (client.service_name || "No service") === filters.service)
     })
   }, [clients, filters])
   const visibleClients = filteredClients.slice(0, visibleClientCount)
@@ -175,8 +171,7 @@ function Broadcasting() {
   const recipients = useMemo(() => clients.filter((client) => selectedRecipients.includes(String(client.id))), [clients, selectedRecipients])
   const eligibleSelected = recipients.filter(eligible)
   const eligibleFiltered = filteredClients.filter(eligible)
-  const serviceNames = [...new Set(clients.map((client) => client.service_name || "Unassigned"))].sort()
-  const memberName = (id) => members.find((member) => String(member.id) === String(id))?.name || "Unassigned"
+  const serviceNames = [...new Set(clients.map((client) => client.service_name || "No service"))].sort()
   const previewClient = eligibleSelected[0] || recipients[0]
   const previewMarkup = bodyHtml
     .replace(/\{\{\s*name\s*\}\}/gi, escapeHtml(previewClient?.name || "Client"))
@@ -232,7 +227,7 @@ function Broadcasting() {
     setEditingCampaignId(campaign.id)
     setSelectedRecipients(campaign.filters?.client_ids || [])
     setVisibleClientCount(100)
-    setFilters({ search: "", stage: campaign.filters?.stage || "all", assignee: campaign.filters?.assignee || "all", service: campaign.filters?.service || "all" })
+    setFilters({ search: "", stage: campaign.filters?.stage || "all", service: campaign.filters?.service || "all" })
     setEditorRevision((value) => value + 1)
     setNotice(`Editing draft “${campaign.name}”.`)
     setError("")
@@ -548,7 +543,7 @@ function Broadcasting() {
 
             <div className="min-w-0 p-4 sm:p-6">
               <div className="mb-4 flex items-start justify-between gap-2"><div><h2 className="text-base font-bold text-slate-900">Choose recipients</h2><p className="mt-1 text-xs text-slate-500">Only clients with channel-specific consent can be selected.</p></div><span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{eligibleSelected.length} selected</span></div>
-              <div className="grid gap-2 sm:grid-cols-2"><input aria-label="Search clients" className={`${inputClass} sm:col-span-2`} value={filters.search} onChange={(event) => changeFilter("search", event.target.value)} placeholder="Search clients, email, phone…"/><select aria-label="Filter by stage" className={inputClass} value={filters.stage} onChange={(event) => changeFilter("stage", event.target.value)}><option value="all">All project stages</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel(stage)}</option>)}</select><select aria-label="Filter by team member" className={inputClass} value={filters.assignee} onChange={(event) => changeFilter("assignee", event.target.value)}><option value="all">All assigned team members</option><option value="">Unassigned</option>{members.map((member) => <option key={member.id} value={String(member.id)}>{member.name}</option>)}</select><select aria-label="Filter by service" className={`${inputClass} sm:col-span-2`} value={filters.service} onChange={(event) => changeFilter("service", event.target.value)}><option value="all">All services</option>{serviceNames.map((service) => <option key={service} value={service}>{service}</option>)}</select></div>
+              <div className="grid gap-2 sm:grid-cols-2"><input aria-label="Search clients" className={`${inputClass} sm:col-span-2`} value={filters.search} onChange={(event) => changeFilter("search", event.target.value)} placeholder="Search clients, email, phone…"/><select aria-label="Filter by stage" className={inputClass} value={filters.stage} onChange={(event) => changeFilter("stage", event.target.value)}><option value="all">All project stages</option>{stages.map((stage) => <option key={stage} value={stage}>{stageLabel(stage)}</option>)}</select><select aria-label="Filter by service" className={`${inputClass} sm:col-span-2`} value={filters.service} onChange={(event) => changeFilter("service", event.target.value)}><option value="all">All services</option>{serviceNames.map((service) => <option key={service} value={service}>{service}</option>)}</select></div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><div className="flex flex-wrap gap-x-3 gap-y-1"><button type="button" onClick={selectFilteredEligible} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Select {eligibleFiltered.length} matching</button><button type="button" onClick={selectAllEligible} className="text-xs font-semibold text-indigo-600 hover:text-indigo-800">Select all {clients.filter(eligible).length} eligible</button></div><button type="button" onClick={() => setSelectedRecipients([])} className="text-xs font-semibold text-slate-400 hover:text-slate-700">Clear</button></div>
               <div className="mt-2 max-h-[440px] overflow-y-auto rounded-xl border border-slate-100">
                 {visibleClients.map((client) => {
@@ -556,7 +551,7 @@ function Broadcasting() {
                   const checked = selectedRecipients.includes(String(client.id))
                   const contact = channel === "email" ? client.email : client.phone
                   const consentLabel = channel === "email" ? client.email_unsubscribed_at ? "Unsubscribed" : !validEmail(client.email) ? "Invalid email" : client.email_marketing_opt_in ? "Opted in" : "No email consent" : !validPhone(client.phone) ? "Invalid phone" : client.whatsapp_opt_in ? "Opted in" : "No WhatsApp opt-in"
-                  return <label key={client.id} className={`flex items-start gap-3 border-b border-slate-100 px-3 py-3 last:border-0 ${canSend ? "cursor-pointer hover:bg-slate-50" : "cursor-not-allowed bg-slate-50/50 opacity-70"}`}><input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={checked} disabled={!canSend} onChange={() => toggleRecipient(client.id)} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><strong className="truncate text-sm font-semibold text-slate-800">{client.name || "Unnamed client"}</strong><span className={`shrink-0 text-[10px] font-semibold ${canSend ? "text-emerald-600" : "text-slate-400"}`}>{consentLabel}</span></span><span className="mt-0.5 block truncate text-xs text-slate-500">{contact || "No contact details"} · {stageLabel(client.stage || "unknown")}</span><span className="mt-0.5 block truncate text-[11px] text-slate-400">{client.service_name || "No service"} · {memberName(client.assigned_to)}</span></span></label>
+                  return <label key={client.id} className={`flex items-start gap-3 border-b border-slate-100 px-3 py-3 last:border-0 ${canSend ? "cursor-pointer hover:bg-slate-50" : "cursor-not-allowed bg-slate-50/50 opacity-70"}`}><input type="checkbox" className="mt-1 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={checked} disabled={!canSend} onChange={() => toggleRecipient(client.id)} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><strong className="truncate text-sm font-semibold text-slate-800">{client.name || "Unnamed client"}</strong><span className={`shrink-0 text-[10px] font-semibold ${canSend ? "text-emerald-600" : "text-slate-400"}`}>{consentLabel}</span></span><span className="mt-0.5 block truncate text-xs text-slate-500">{contact || "No contact details"} · {stageLabel(client.stage || "unknown")}</span><span className="mt-0.5 block truncate text-[11px] text-slate-400">{client.service_name || "No service"}</span></span></label>
                 })}
                 {filteredClients.length === 0 && <p className="px-4 py-9 text-center text-sm text-slate-400">No clients match these filters.</p>}
               </div>

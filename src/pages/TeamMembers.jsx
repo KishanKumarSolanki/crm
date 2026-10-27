@@ -485,15 +485,12 @@ export default function TeamMembers() {
                   return (
                     <tr key={member.id} className="group transition hover:bg-slate-50/70">
                       <td className="border-b border-slate-100 px-5 py-3.5">
-                        <Link
-                          to={`/team-member/${member.id}`}
-                          className="flex items-center gap-3 text-inherit no-underline"
-                        >
+                        <div className="flex items-center gap-3">
                           <Avatar name={member.name} seed={member.id} />
                           <span className="text-sm font-semibold text-slate-900 transition group-hover:text-indigo-700">
                             {member.name}
                           </span>
-                        </Link>
+                        </div>
                       </td>
 
                       <td className="border-b border-slate-100 px-5 py-3.5 text-[13px] text-slate-600">

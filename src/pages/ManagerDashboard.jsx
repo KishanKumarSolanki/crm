@@ -28,8 +28,8 @@ export default function ManagerDashboard() {
     const loadDashboard = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const [leadResult, taskResult, profileResult] = await Promise.all([
-        supabase.from("clients").select("id,name,company,email,phone,stage,assigned_to,created_at,next_follow_up").order("created_at", { ascending: false }),
-        supabase.from("tasks").select("id,title,status,due_date,client_id,assigned_to").neq("status", "completed").order("due_date", { ascending: true }),
+        supabase.from("clients").select("id,name,company,email,phone,stage,created_at,next_follow_up").order("created_at", { ascending: false }),
+        supabase.from("tasks").select("id,title,status,due_date,client_id").neq("status", "completed").order("due_date", { ascending: true }),
         user ? supabase.from("profiles").select("manager_service").eq("id", user.id).single() : Promise.resolve({ data: null, error: null }),
       ]);
       if (!active) return;
@@ -65,7 +65,7 @@ export default function ManagerDashboard() {
     </section>
     <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex items-center justify-between"><div><h2 className="text-base font-bold text-slate-900">Recent leads</h2><p className="mt-1 text-xs text-slate-500">Open a record to contact the lead or update its stage.</p></div><Link to="/leads" className="text-sm font-semibold text-indigo-600 no-underline">All leads →</Link></div>
-      {loading ? <p className="py-8 text-center text-sm text-slate-400">Loading leads…</p> : leads.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No leads yet.</p> : <div className="divide-y divide-slate-100">{leads.slice(0, 8).map((lead) => <Link key={lead.id} to={`/lead/${lead.id}`} className="flex flex-wrap items-center gap-3 py-3 text-inherit no-underline hover:bg-slate-50"><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-800">{lead.name || "Unnamed lead"}</strong><span className="mt-0.5 block truncate text-xs text-slate-400">{lead.company || lead.email || lead.phone || "No contact details"}</span></span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{STAGES.find(([key]) => key === lead.stage)?.[1] || lead.stage || "Unassigned"}</span><span className="text-xs text-indigo-600">Open →</span></Link>)}</div>}
+      {loading ? <p className="py-8 text-center text-sm text-slate-400">Loading leads…</p> : leads.length === 0 ? <p className="py-8 text-center text-sm text-slate-400">No leads yet.</p> : <div className="divide-y divide-slate-100">{leads.slice(0, 8).map((lead) => <Link key={lead.id} to={`/lead/${lead.id}`} className="flex flex-wrap items-center gap-3 py-3 text-inherit no-underline hover:bg-slate-50"><span className="min-w-0 flex-1"><strong className="block truncate text-sm text-slate-800">{lead.name || "Unnamed lead"}</strong><span className="mt-0.5 block truncate text-xs text-slate-400">{lead.company || lead.email || lead.phone || "No contact details"}</span></span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{STAGES.find(([key]) => key === lead.stage)?.[1] || lead.stage || "Unknown"}</span><span className="text-xs text-indigo-600">Open →</span></Link>)}</div>}
     </section>
   </div>;
 }
