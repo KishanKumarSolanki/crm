@@ -44,7 +44,12 @@ Deno.serve(async (request) => {
       p_window_seconds: 600,
     });
     if (rateLimitError) {
-      console.error("Lead capture rate limiter failed", rateLimitError.message);
+      console.error("Lead capture rate limiter failed", JSON.stringify({
+        message: rateLimitError.message,
+        code: rateLimitError.code,
+        details: rateLimitError.details,
+        hint: rateLimitError.hint,
+      }));
       return jsonResponse({ error: "Lead capture is temporarily unavailable." }, 503, headers);
     }
     if (!allowed) return jsonResponse({ error: "Too many enquiries from this connection. Please try again in a few minutes." }, 429, { ...headers, "Retry-After": "600" });
