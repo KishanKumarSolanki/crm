@@ -1,3 +1,4 @@
+
 const PRODUCTION_ORIGIN = "https://igs-pink.vercel.app";
 
 export function corsHeaders(origin: string | null) {
@@ -26,6 +27,7 @@ export function corsHeaders(origin: string | null) {
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type, x-internal-secret",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Max-Age": "86400",
     "Vary": "Origin",
   };
 }
@@ -37,6 +39,9 @@ export function jsonResponse(
 ) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "Content-Type": "application/json", ...headers },
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      ...headers,
+    },
   });
 }
