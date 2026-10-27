@@ -403,6 +403,9 @@ export default function LeadDetail() {
     event.preventDefault()
     if (!conversationText.trim()) return
     setSavingConversation(true)
+    const followUpAt = conversationFollowUp
+      ? new Date(conversationFollowUp).toISOString()
+      : null
 
     const { error: activityError } = await supabase.from("activities").insert({
       client_id: id,
@@ -410,6 +413,7 @@ export default function LeadDetail() {
       contact_method: conversationMethod,
       description: conversationText.trim(),
       outcome: conversationOutcome.trim() || null,
+      follow_up_at: followUpAt,
     })
 
     if (activityError) {
@@ -418,8 +422,7 @@ export default function LeadDetail() {
       return
     }
 
-    if (conversationFollowUp) {
-      const followUpAt = new Date(conversationFollowUp).toISOString()
+    if (followUpAt) {
       const { error: leadUpdateError } = await supabase
         .from("clients")
         .update({ next_follow_up: followUpAt })
@@ -468,6 +471,14 @@ export default function LeadDetail() {
   const pendingTasks = useMemo(
     () => tasks.filter((t) => t.status !== "completed"),
     [tasks]
+  )
+  const conversations = useMemo(
+    () => activities.filter((activity) => activity.type === "conversation"),
+    [activities]
+  )
+  const otherActivities = useMemo(
+    () => activities.filter((activity) => activity.type !== "conversation"),
+    [activities]
   )
 
   const sourceFields = [
@@ -756,6 +767,46 @@ export default function LeadDetail() {
         </SectionCard>
       </div>
 
+      {/* CONVERSATION HISTORY FOR THIS LEAD ONLY */}
+      <SectionCard
+        title="Conversation history"
+        subtitle={`Saved conversations for ${lead.name}`}
+        action={<CountBadge>{conversations.length}</CountBadge>}
+      >
+        {conversations.length === 0 ? (
+          <EmptyState icon="leads">No conversations recorded for this lead yet.</EmptyState>
+        ) : (
+          <ol className="divide-y divide-slate-100">
+            {conversations.map((conversation) => (
+              <li key={conversation.id} className="px-5 py-4 sm:px-6">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="rounded-md bg-violet-50 px-2.5 py-1 text-[11px] font-semibold capitalize text-violet-700 ring-1 ring-violet-100">
+                    {conversation.contact_method || "Conversation"}
+                  </span>
+                  <time className="text-[11px] text-slate-400" dateTime={conversation.created_at}>
+                    {formatDate(conversation.created_at)}
+                  </time>
+                </div>
+                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-800">
+                  {conversation.description}
+                </p>
+                {conversation.outcome && (
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 px-3.5 py-3 text-sm leading-relaxed text-slate-600">
+                    <span className="font-semibold text-slate-700">Outcome / follow-up note: </span>
+                    {conversation.outcome}
+                  </p>
+                )}
+                {conversation.follow_up_at && (
+                  <p className="mt-2 text-xs font-medium text-indigo-700">
+                    Next follow-up: {formatDate(conversation.follow_up_at)}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        )}
+      </SectionCard>
+
       {/* TASKS + NOTES */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
         <SectionCard
@@ -870,16 +921,16 @@ export default function LeadDetail() {
 
       {/* ACTIVITY TIMELINE */}
       <SectionCard
-        title="Activity timeline"
-        subtitle="Everything that has happened on this lead"
-        action={<CountBadge>{activities.length}</CountBadge>}
+        title="Other activity"
+        subtitle="Updates recorded for this lead"
+        action={<CountBadge>{otherActivities.length}</CountBadge>}
       >
-        {activities.length === 0 ? (
+        {otherActivities.length === 0 ? (
           <EmptyState icon="dashboard">No activity recorded.</EmptyState>
         ) : (
           <ol className="relative px-5 py-4 sm:px-6">
             <span className="absolute bottom-6 left-[37px] top-6 w-px bg-slate-200 sm:left-[41px]" aria-hidden="true" />
-            {activities.map((activity) => (
+            {otherActivities.map((activity) => (
               <li key={activity.id} className="relative flex gap-4 py-3">
                 <div
                   className={`relative z-10 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${

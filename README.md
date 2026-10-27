@@ -29,6 +29,7 @@ A React + Vite CRM for managing leads, sales stages, follow-up tasks, and team m
    - `20261024130000_admin_manager_service_scope.sql` limits sign-in to Admin and Manager and restricts each Manager to one lead service/source.
    - `20261024140000_broadcasting.sql` adds channel consent fields, admin-only campaign/recipient logs, the atomic queue claim, and private campaign attachment storage.
    - `20261024150000_emailjs_broadcast_rate_limit.sql` spaces EmailJS sends across concurrent queue workers.
+   - `20261027000000_conversation_follow_up.sql` stores each conversation's selected follow-up date on its activity record.
    - Review the access-control notes below before applying the migrations to an existing database.
 
 4. Start the development server:
