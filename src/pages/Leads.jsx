@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import readXlsxFile from "read-excel-file/browser"
 import { supabase } from "../lib/supabase"
 import { Link } from "react-router-dom"
@@ -196,6 +196,9 @@ export default function Leads() {
   const [importing, setImporting] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
   const [showAddLead, setShowAddLead] = useState(false)
+  const [showImportCategory, setShowImportCategory] = useState(false)
+  const [importCategory, setImportCategory] = useState("")
+  const importFileRef = useRef(null)
 
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
@@ -339,34 +342,117 @@ export default function Leads() {
     event.target.value = ""
     if (!file) return
 
+    const importCategoryLabel = LEAD_CATEGORIES.find((category) => category.id === importCategory)?.label
+    if (!importCategoryLabel) {
+      alert("Please choose the category for this workbook first.")
+      return
+    }
+
     setImporting(true)
 
     try {
-      const rows = await readXlsxFile(file)
-      if (rows.length < 2) {
-        throw new Error("Workbook needs a header row and at least one lead row.")
+      const normalizeHeader = (value) => String(value ?? "").toLowerCase().replace(/[^a-z]/g, "")
+      const workbookSheets = await readXlsxFile(file)
+      const sheets = Array.isArray(workbookSheets)
+        ? workbookSheets
+        : [{ sheet: "Sheet1", data: workbookSheets }]
+      const rows = sheets.find(({ data }) => {
+        if (!Array.isArray(data) || data.length < 2) return false
+        const sheetHeaders = data[0].map(normalizeHeader)
+        const hasName = sheetHeaders.some((header) => ["name", "leadname", "fullname"].includes(header))
+        const hasContact = sheetHeaders.some((header) => ["email", "emailaddress", "phone", "phonenumber", "mobile", "mobilenumber", "whatsapp", "whatsappnumber"].includes(header))
+        return hasName && hasContact
+      })?.data
+
+      if (!rows) {
+        const hasDataRows = sheets.some(({ data }) => Array.isArray(data) && data.length >= 2)
+        if (!hasDataRows) {
+          throw new Error("No lead rows found. The workbook needs a header row and at least one lead row below it.")
+        }
+        throw new Error("Could not find a worksheet with a Name header and at least one Email or Phone header.")
       }
 
-      const normalizeHeader = (value) => String(value ?? "").toLowerCase().replace(/[^a-z]/g, "")
       const headers = rows[0].map(normalizeHeader)
 
       const nameIndex = headers.findIndex((h) => ["name", "leadname", "fullname"].includes(h))
-      const emailIndex = headers.findIndex((h) => h === "email")
-      const companyIndex = headers.findIndex((h) => ["company", "companyname", "organization"].includes(h))
+      const emailIndex = headers.findIndex((h) => ["email", "emailaddress"].includes(h))
+      const phoneIndex = headers.findIndex((h) => ["phone", "phonenumber", "mobile", "mobilenumber", "whatsapp", "whatsappnumber"].includes(h))
+      const companyIndex = headers.findIndex((h) => ["company", "companyname", "organization", "institute", "institutename", "business", "businessname"].includes(h))
+      const timestampIndex = headers.findIndex((h) => ["timestamp", "date", "createdat"].includes(h))
+      const cityIndex = headers.findIndex((h) => h === "city")
+      const coursesIndex = headers.findIndex((h) => ["course", "courses", "service", "services"].includes(h))
+      const otherCourseIndex = headers.findIndex((h) => h === "othercourse")
+      const challengeIndex = headers.findIndex((h) => ["challenge", "requirement", "requirements"].includes(h))
+      const budgetIndex = headers.findIndex((h) => h === "budget")
+      const startIndex = headers.findIndex((h) => ["start", "startdate", "timeline"].includes(h))
+      const roleIndex = headers.findIndex((h) => ["role", "jobrole"].includes(h))
+      const websiteIndex = headers.findIndex((h) => ["websiteinstagram", "website", "instagram", "sociallink"].includes(h))
+      const leadScoreIndex = headers.findIndex((h) => h === "leadscore")
+      const leadTemperatureIndex = headers.findIndex((h) => ["leadtemperature", "temperature"].includes(h))
+      const totalPointsIndex = headers.findIndex((h) => h === "totalpoints")
+      const leadSummaryIndex = headers.findIndex((h) => h === "leadsummary")
+      const externalLeadIdIndex = headers.findIndex((h) => ["leadid", "externalleadid"].includes(h))
+      const stageIndex = headers.findIndex((h) => h === "stage")
+      const crmDeliveryIndex = headers.findIndex((h) => ["crmdelivery", "delivery"].includes(h))
 
-      if (nameIndex < 0 || emailIndex < 0) {
-        throw new Error("Excel headers must include Name and Email. Company is optional.")
+      if (nameIndex < 0 || (emailIndex < 0 && phoneIndex < 0)) {
+        throw new Error("Excel headers must include Name and at least one contact column: Email or Phone.")
       }
 
       const importedRows = rows
         .slice(1)
         .filter((row) => row.some((value) => String(value ?? "").trim()))
-        .map((row, index) => ({
-          rowNumber: index + 2,
-          name: String(row[nameIndex] ?? "").trim(),
-          email: String(row[emailIndex] ?? "").trim(),
-          company: companyIndex < 0 ? "" : String(row[companyIndex] ?? "").trim(),
-        }))
+        .map((row, index) => {
+          const cellText = (columnIndex) => columnIndex < 0 ? "" : String(row[columnIndex] ?? "").trim()
+          const extraDetails = [
+            ["Timestamp", cellText(timestampIndex)],
+            ["City", cellText(cityIndex)],
+            ["Courses", cellText(coursesIndex)],
+            ["Other Course", cellText(otherCourseIndex)],
+            ["Challenge", cellText(challengeIndex)],
+            ["Budget", cellText(budgetIndex)],
+            ["Start", cellText(startIndex)],
+            ["Role", cellText(roleIndex)],
+            ["Website / Instagram", cellText(websiteIndex)],
+            ["Lead Score", cellText(leadScoreIndex)],
+            ["Lead Temperature", cellText(leadTemperatureIndex)],
+            ["Total Points", cellText(totalPointsIndex)],
+            ["Lead Summary", cellText(leadSummaryIndex)],
+            ["Lead ID", cellText(externalLeadIdIndex)],
+            ["Stage", cellText(stageIndex)],
+            ["CRM delivery", cellText(crmDeliveryIndex)],
+          ].filter(([, value]) => value)
+          const stageValue = normalizeHeader(cellText(stageIndex))
+          const stageAliases = {
+            new: "discovery",
+            newlead: "discovery",
+            discovery: "discovery",
+            contacted: "contacted",
+            qualified: "qualified",
+            meetingbooked: "meeting_booked",
+            followup: "follow_up",
+            signed: "signed",
+            closed: "signed",
+            closedandsigned: "signed",
+            active: "active",
+            inprogress: "active",
+            inrevision: "in_revision",
+            delivered: "delivered",
+          }
+
+          return {
+            rowNumber: index + 2,
+            name: cellText(nameIndex),
+            email: cellText(emailIndex),
+            phone: cellText(phoneIndex),
+            company: cellText(companyIndex),
+            serviceName: [cellText(coursesIndex), cellText(otherCourseIndex)].filter(Boolean).join("; "),
+            leadSource: importCategoryLabel,
+            externalLeadId: cellText(externalLeadIdIndex).slice(0, 120),
+            stage: stageAliases[stageValue] || "discovery",
+            note: extraDetails.map(([label, value]) => `${label}: ${value}`).join("\n"),
+          }
+        })
 
       if (!importedRows.length) {
         throw new Error("No lead rows were found in this workbook.")
@@ -375,7 +461,15 @@ export default function Leads() {
       const knownEmails = new Set(
         leads.map((lead) => lead.email?.trim().toLowerCase()).filter(Boolean)
       )
+      const normalizePhone = (value) => {
+        const digits = String(value ?? "").replace(/\D/g, "")
+        return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits
+      }
+      const knownPhones = new Set(leads.map((lead) => normalizePhone(lead.phone)).filter(Boolean))
+      const knownExternalIds = new Set(leads.map((lead) => lead.external_lead_id).filter(Boolean))
       const workbookEmails = new Set()
+      const workbookPhones = new Set()
+      const workbookExternalIds = new Set()
       let added = 0
       let skipped = 0
       let failed = 0
@@ -383,26 +477,41 @@ export default function Leads() {
 
       for (const row of importedRows) {
         const normalizedEmail = row.email.toLowerCase()
+        const normalizedPhone = normalizePhone(row.phone)
+        const phoneIsValid = !row.phone || (
+          /^[+]?([\d\s\-().]){7,15}$/.test(row.phone) &&
+          normalizedPhone.length >= 7 && normalizedPhone.length <= 15
+        )
+        const emailIsValid = !row.email || EMAIL_RE.test(row.email)
 
         if (
           !row.name ||
-          !EMAIL_RE.test(row.email) ||
-          knownEmails.has(normalizedEmail) ||
-          workbookEmails.has(normalizedEmail)
+          (!row.email && !row.phone) ||
+          !emailIsValid ||
+          !phoneIsValid ||
+          (normalizedEmail && (knownEmails.has(normalizedEmail) || workbookEmails.has(normalizedEmail))) ||
+          (normalizedPhone && (knownPhones.has(normalizedPhone) || workbookPhones.has(normalizedPhone))) ||
+          (row.externalLeadId && (knownExternalIds.has(row.externalLeadId) || workbookExternalIds.has(row.externalLeadId)))
         ) {
           skipped += 1
           continue
         }
-        workbookEmails.add(normalizedEmail)
+        if (normalizedEmail) workbookEmails.add(normalizedEmail)
+        if (normalizedPhone) workbookPhones.add(normalizedPhone)
+        if (row.externalLeadId) workbookExternalIds.add(row.externalLeadId)
 
         try {
           const { data: newLead, error } = await supabase
             .from("clients")
             .insert({
               name: row.name,
-              email: row.email,
-              company: row.company,
-              stage: "discovery",
+              email: row.email || null,
+              phone: row.phone || null,
+              company: row.company || null,
+              service_name: row.serviceName || null,
+              lead_source: row.leadSource || null,
+              external_lead_id: row.externalLeadId || null,
+              stage: row.stage,
             })
             .select()
             .single()
@@ -410,7 +519,9 @@ export default function Leads() {
           if (error) throw error
 
           added += 1
-          knownEmails.add(normalizedEmail)
+          if (normalizedEmail) knownEmails.add(normalizedEmail)
+          if (normalizedPhone) knownPhones.add(normalizedPhone)
+          if (row.externalLeadId) knownExternalIds.add(row.externalLeadId)
 
           const { error: taskError } = await supabase.from("tasks").insert({
             client_id: newLead.id,
@@ -426,6 +537,14 @@ export default function Leads() {
             description: "Lead imported",
           })
           if (activityError) console.error("Imported lead activity error:", activityError)
+
+          if (row.note) {
+            const { error: noteError } = await supabase.from("notes").insert({
+              client_id: newLead.id,
+              note: row.note,
+            })
+            if (noteError) console.error("Imported lead note error:", noteError)
+          }
         } catch (error) {
           failed += 1
           console.error(`Lead import failed on row ${row.rowNumber}:`, error)
@@ -439,6 +558,7 @@ export default function Leads() {
       setPage(1)
 
       const summary = [
+        `Category: ${importCategoryLabel}`,
         `Leads added: ${added}`,
         `Skipped (invalid or duplicate): ${skipped}`,
         `Could not save: ${failed}`,
@@ -814,6 +934,69 @@ export default function Leads() {
       </div>
       )}
 
+      {showImportCategory && (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/45 p-3 sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowImportCategory(false)
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-category-title"
+            className={`${cardClass} w-full max-w-md p-5 sm:p-6`}
+          >
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 id="import-category-title" className="text-base font-bold text-slate-900">Choose lead category</h2>
+                <p className="mt-1 text-sm text-slate-500">All leads in this workbook will be added under this category.</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close category selection"
+                onClick={() => setShowImportCategory(false)}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50"
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </div>
+
+            <label htmlFor="excel-import-category" className={labelClass}>Workbook category</label>
+            <select
+              id="excel-import-category"
+              autoFocus
+              className={inputClass}
+              value={importCategory}
+              onChange={(event) => setImportCategory(event.target.value)}
+            >
+              <option value="">Select a category</option>
+              {LEAD_CATEGORIES.map((category) => (
+                <option key={category.id} value={category.id}>{category.label}</option>
+              ))}
+            </select>
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setShowImportCategory(false)} className={btnGhost}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!importCategory || importing}
+                onClick={() => {
+                  setShowImportCategory(false)
+                  importFileRef.current?.click()
+                }}
+                className={btnPrimary}
+              >
+                Choose Excel file
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* LEAD LIST */}
       <section className={`${cardClass} overflow-hidden`}>
         {/* Category tabs */}
@@ -897,20 +1080,24 @@ export default function Leads() {
             </select>
 
             <div className="flex gap-2">
-              <label
-                className={`${btnGhost} h-10 cursor-pointer ${importing ? "cursor-wait opacity-60" : ""}`}
+              <button
+                type="button"
+                onClick={() => setShowImportCategory(true)}
+                disabled={importing}
+                className={`${btnGhost} h-10 ${importing ? "cursor-wait opacity-60" : ""}`}
               >
                 <Icon name="plus" size={14} />
                 {importing ? "Importing..." : "Upload Excel"}
-                <input
-                  type="file"
-                  accept=".xlsx"
-                  onChange={importLeadsFromExcel}
-                  disabled={importing}
-                  aria-label="Upload Excel workbook"
-                  className="hidden"
-                />
-              </label>
+              </button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept=".xlsx"
+                onChange={importLeadsFromExcel}
+                disabled={importing}
+                aria-label="Upload Excel workbook"
+                className="hidden"
+              />
 
               <button type="button" onClick={exportLeadsToCsv} className={`${btnGhost} h-10`}>
                 Export CSV

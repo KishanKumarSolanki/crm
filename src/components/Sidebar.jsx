@@ -47,10 +47,11 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
           showLabels ? "" : "justify-center min-[769px]:justify-start"
         }`}
       >
-        <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-[18px] font-bold text-white shadow-lg shadow-indigo-500/30">
-          <span className="relative z-10">C</span>
-          <span className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0" />
-        </div>
+        <img
+          src="/logo.jpeg"
+          alt="Creative Crew logo"
+          className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-lg shadow-indigo-500/30"
+        />
         <div className={textBlockClass}>
           <h2 className="text-[17px] font-bold leading-tight tracking-tight text-slate-900">Creative Crew</h2>
           <span className="mt-0.5 block text-[11px] font-medium leading-tight text-slate-400">
