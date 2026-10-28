@@ -52,9 +52,9 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
           <span className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/20 to-white/0" />
         </div>
         <div className={textBlockClass}>
-          <h2 className="text-[17px] font-bold leading-tight tracking-tight text-slate-900">CRM</h2>
+          <h2 className="text-[17px] font-bold leading-tight tracking-tight text-slate-900">Creative Crew</h2>
           <span className="mt-0.5 block text-[11px] font-medium leading-tight text-slate-400">
-            Management System
+            Customer Management System
           </span>
         </div>
       </div>

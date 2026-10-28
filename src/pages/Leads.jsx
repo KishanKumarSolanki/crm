@@ -86,7 +86,18 @@ const formatShortDateTime = (value) =>
       })
     : "—"
 
-const isIgs = (lead) => lead.lead_source?.trim().toLowerCase() === "igs"
+const LEAD_CATEGORIES = [
+  { id: "igs", label: "Institute Growth System", aliases: ["igs", "institute growth system"] },
+  { id: "dm", label: "Digital Marketing", aliases: ["dm", "digital marketing"] },
+  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
+  { id: "lms", label: "LMS", aliases: ["lms"] },
+  { id: "ncf", label: "NCF", aliases: ["ncf"] },
+]
+
+const categoryForLead = (lead) => {
+  const source = lead.lead_source?.trim().toLowerCase()
+  return LEAD_CATEGORIES.find((category) => category.aliases.includes(source))?.id || null
+}
 
 const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
 
@@ -184,6 +195,7 @@ export default function Leads() {
   const [loading, setLoading] = useState(false)
   const [importing, setImporting] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
+  const [showAddLead, setShowAddLead] = useState(false)
 
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
@@ -304,6 +316,7 @@ export default function Leads() {
       resetForm()
       await fetchLeads()
       setPage(1)
+      setShowAddLead(false)
       alert("Lead added. The welcome email will be sent when you move it to Contacted.")
     } catch (err) {
       alert(err.message)
@@ -311,6 +324,15 @@ export default function Leads() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    if (!showAddLead) return undefined
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape" && !loading) setShowAddLead(false)
+    }
+    window.addEventListener("keydown", closeOnEscape)
+    return () => window.removeEventListener("keydown", closeOnEscape)
+  }, [showAddLead, loading])
 
   const importLeadsFromExcel = async (event) => {
     const file = event.target.files?.[0]
@@ -542,17 +564,17 @@ export default function Leads() {
   // =========================
 
   const categoryCounts = useMemo(
-    () => ({
-      all: leads.length,
-      igs: leads.filter(isIgs).length,
-    }),
+    () => Object.fromEntries([
+      ["all", leads.length],
+      ...LEAD_CATEGORIES.map((category) => [category.id, leads.filter((lead) => categoryForLead(lead) === category.id).length]),
+    ]),
     [leads]
   )
 
   const filteredLeads = useMemo(() => {
     const query = search.toLowerCase().trim()
     return leads.filter((lead) => {
-      const matchesCategory = leadCategory === "all" || isIgs(lead)
+      const matchesCategory = leadCategory === "all" || categoryForLead(lead) === leadCategory
       const matchesSearch =
         !query ||
         lead.name?.toLowerCase().includes(query) ||
@@ -616,9 +638,19 @@ export default function Leads() {
           <p className="mt-1.5 text-sm text-slate-500">Manage your leads, pipeline and relationships.</p>
         </div>
 
-        <div className="flex items-center gap-2.5 rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm self-start sm:self-auto">
-          <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Total</span>
-          <strong className="text-xl font-bold text-slate-900">{stats.total}</strong>
+        <div className="flex flex-col items-stretch gap-2 self-start sm:self-auto">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Total</span>
+            <strong className="text-xl font-bold text-slate-900">{stats.total}</strong>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowAddLead(true)}
+            className={`${btnPrimary} w-full`}
+          >
+            <Icon name="plus" size={15} />
+            Add lead
+          </button>
         </div>
       </header>
 
@@ -629,24 +661,49 @@ export default function Leads() {
         ))}
       </div>
 
-      {/* ADD LEAD */}
-      <section className={`${cardClass} p-5 sm:p-6`}>
+      {/* ADD LEAD MODAL */}
+      {showAddLead && (
+      <div
+        className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/45 p-3 sm:p-6"
+        role="presentation"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget && !loading) setShowAddLead(false)
+        }}
+      >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-lead-title"
+        className={`${cardClass} relative max-h-[90vh] w-full max-w-4xl overflow-y-auto p-5 sm:p-6`}
+      >
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/25">
               <Icon name="plus" size={18} />
             </div>
             <div>
-              <h2 className="text-[15px] font-bold tracking-tight">Add new lead</h2>
+              <h2 id="add-lead-title" className="text-[15px] font-bold tracking-tight">Add new lead</h2>
               <p className="mt-0.5 text-xs text-slate-500">Creates a lead, a follow-up task and an activity record.</p>
             </div>
           </div>
-          <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            Automation active
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Automation active
+            </span>
+            <button
+              type="button"
+              aria-label="Close add lead dialog"
+              onClick={() => !loading && setShowAddLead(false)}
+              className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50"
+              disabled={loading}
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
         </div>
 
+        <form onSubmit={(event) => { event.preventDefault(); void addLead() }}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <div>
             <label className={labelClass} htmlFor="lead-name">
@@ -712,14 +769,17 @@ export default function Leads() {
           </div>
 
           <div>
-            <label className={labelClass} htmlFor="lead-source">Lead source</label>
-            <InputWithIcon
+            <label className={labelClass} htmlFor="lead-source">Lead category / source</label>
+            <select
               id="lead-source"
-              type="text"
-              placeholder="Website, referral..."
+              className={inputClass}
               value={leadSource}
               onChange={(e) => setLeadSource(e.target.value)}
-            />
+            >
+              <option value="">Choose a category</option>
+              {LEAD_CATEGORIES.map((category) => <option key={category.id} value={category.label}>{category.label}</option>)}
+              <option value="Website / referral / other">Website / referral / other</option>
+            </select>
           </div>
 
           <div>
@@ -734,7 +794,7 @@ export default function Leads() {
           </div>
 
           <div className="flex items-end">
-            <button onClick={addLead} disabled={loading || importing} className={`${btnPrimary} w-full`}>
+            <button type="submit" disabled={loading || importing} className={`${btnPrimary} w-full`}>
               {loading ? (
                 <>
                   <span className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white" />
@@ -749,7 +809,10 @@ export default function Leads() {
             </button>
           </div>
         </div>
+        </form>
       </section>
+      </div>
+      )}
 
       {/* LEAD LIST */}
       <section className={`${cardClass} overflow-hidden`}>
@@ -757,7 +820,7 @@ export default function Leads() {
         <div role="tablist" aria-label="Lead categories" className="flex gap-1 overflow-x-auto border-b border-slate-100 px-4 pt-3 sm:px-5">
           {[
             { id: "all", label: "All" },
-            { id: "igs", label: "IGS" },
+            ...LEAD_CATEGORIES,
           ].map((category) => {
             const selected = leadCategory === category.id
             return (
@@ -793,7 +856,9 @@ export default function Leads() {
         {/* Toolbar */}
         <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-bold tracking-tight">All leads</h2>
+            <h2 className="text-[15px] font-bold tracking-tight">
+              {leadCategory === "all" ? "All leads" : `${LEAD_CATEGORIES.find((category) => category.id === leadCategory)?.label || "Other"} leads`}
+            </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Showing {visibleLeads.length} of {filteredLeads.length} matching lead{filteredLeads.length !== 1 ? "s" : ""}
             </p>
