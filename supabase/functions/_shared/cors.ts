@@ -1,6 +1,4 @@
 
-const PRODUCTION_ORIGIN = "https://igs-pink.vercel.app";
-
 export function corsHeaders(origin: string | null) {
   const configuredOrigins = (
     Deno.env.get("PUBLIC_SITE_URLS") ||
@@ -11,12 +9,10 @@ export function corsHeaders(origin: string | null) {
     .map((value) => value.trim().replace(/\/$/, ""))
     .filter(Boolean);
 
-  const allowedOrigins = new Set([
-    PRODUCTION_ORIGIN,
-    ...configuredOrigins,
-  ]);
+  const allowedOrigins = new Set(configuredOrigins);
 
   const normalizedOrigin = origin?.replace(/\/$/, "");
+
   const allowOrigin =
     normalizedOrigin && allowedOrigins.has(normalizedOrigin)
       ? normalizedOrigin
