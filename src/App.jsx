@@ -9,7 +9,6 @@ const LeadDetail = lazy(() => import("./pages/LeadDetail"))
 const Pipeline = lazy(() => import("./pages/Pipeline"))
 const Tasks = lazy(() => import("./pages/Tasks"))
 const TeamMembers = lazy(() => import("./pages/TeamMembers"))
-const LandingPage = lazy(() => import("./pages/LandingPage"))
 const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
 const Broadcasting = lazy(() => import("./pages/Broadcasting"))
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"))
@@ -40,7 +39,7 @@ function App() {
           element={<Login />}
         />
 
-        <Route path="/landing" element={<LandingPage />} />
+        <Route path="/landing" element={<Navigate to="/login" replace />} />
         <Route path="/unsubscribe" element={<Unsubscribe />} />
 
 
