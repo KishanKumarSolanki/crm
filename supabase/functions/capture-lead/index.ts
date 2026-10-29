@@ -26,6 +26,7 @@ Deno.serve(async (request) => {
   const email = boundedText(body.email, 254).toLowerCase();
   const phone = boundedText(body.phone, 40);
   const externalLeadId = boundedText(body.external_lead_id, 120) || null;
+  const formStage = boundedText(body.form_stage, 20) === "step1" ? "step1" : "complete";
   if (!name || (!email && !phone)) return jsonResponse({ error: "Name and either email or phone are required." }, 400, headers);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonResponse({ error: "Enter a valid email address." }, 400, headers);
 
@@ -56,11 +57,15 @@ Deno.serve(async (request) => {
   }
   if (externalLeadId) {
     const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id")
+      .select("id, service_name")
       .eq("external_lead_id", externalLeadId)
       .maybeSingle();
     if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
-    if (existingLead) return jsonResponse({ ok: true, duplicate: true }, 200, headers);
+    // Stage 1 creates the CRM record. On final submission, update that same row
+    // rather than creating a duplicate lead. Repeated completed submissions are idempotent.
+    if (existingLead && formStage === "complete" && existingLead.service_name) {
+      return jsonResponse({ ok: true, duplicate: true }, 200, headers);
+    }
   }
   const attribution = (body.attribution && typeof body.attribution === "object")
     ? body.attribution as Record<string, unknown>
@@ -69,7 +74,7 @@ Deno.serve(async (request) => {
   const submittedAt = Number(body.submitted_at || 0);
   if (submittedAt && Date.now() - submittedAt < 1800) return jsonResponse({ error: "Please try submitting the form again." }, 400, headers);
 
-  const { data: lead, error: leadError } = await db.from("clients").insert({
+  const leadFields = {
     external_lead_id: externalLeadId,
     name,
     email: email || null,
@@ -87,7 +92,36 @@ Deno.serve(async (request) => {
     landing_page_url: boundedText(body.landing_page_url, 1000) || null,
     marketing_consent: consent,
     stage: "discovery",
-  }).select("id").single();
+  };
+
+  let lead: { id: string } | null = null;
+  let leadError: { code?: string; message: string } | null = null;
+  let isNewLead = true;
+  if (externalLeadId) {
+    const { data: existingLead, error: existingLeadError } = await db.from("clients")
+      .select("id, service_name")
+      .eq("external_lead_id", externalLeadId)
+      .maybeSingle();
+    if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
+    if (existingLead && formStage === "complete" && existingLead.service_name) {
+      return jsonResponse({ ok: true, duplicate: true }, 200, headers);
+    }
+    if (existingLead) {
+      isNewLead = false;
+      const { data, error } = await db.from("clients").update(leadFields)
+        .eq("id", existingLead.id).select("id").single();
+      lead = data;
+      leadError = error;
+    } else {
+      const { data, error } = await db.from("clients").insert(leadFields).select("id").single();
+      lead = data;
+      leadError = error;
+    }
+  } else {
+    const { data, error } = await db.from("clients").insert(leadFields).select("id").single();
+    lead = data;
+    leadError = error;
+  }
 
   if (leadError || !lead) {
     if (externalLeadId && leadError?.code === "23505") {
@@ -103,11 +137,21 @@ Deno.serve(async (request) => {
 
   const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   const [taskResult, noteResult, activityResult] = await Promise.all([
-    db.from("tasks").insert({ client_id: lead.id, title: "Follow up with new lead", due_date: dueDate, status: "pending" }),
+    isNewLead
+      ? db.from("tasks").insert({ client_id: lead.id, title: "Follow up with new lead", due_date: dueDate, status: "pending" })
+      : Promise.resolve({ error: null }),
     boundedText(body.message, 2000)
       ? db.from("notes").insert({ client_id: lead.id, note: boundedText(body.message, 2000) })
       : Promise.resolve({ error: null }),
-    db.from("activities").insert({ client_id: lead.id, type: "created", description: "Lead captured from the Creative Crew landing page" }),
+    db.from("activities").insert({
+      client_id: lead.id,
+      type: isNewLead ? "created" : "updated",
+      description: isNewLead
+        ? "Lead captured from the Creative Crew landing page"
+        : formStage === "complete"
+          ? "Lead completed the admission goals form"
+          : "Lead updated their institute details",
+    }),
   ]);
   if (taskResult.error) console.error("Lead follow-up task insert failed", taskResult.error.message);
   if (noteResult.error) console.error("Lead message insert failed", noteResult.error.message);
