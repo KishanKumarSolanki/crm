@@ -12,7 +12,7 @@ const menuItems = [
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];
 
-function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM User", role = "" }) {
+function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM User", role = "" }) {
   const visibleItems = menuItems.filter(
     (item) =>
       (!item.adminOnly || role === "admin" || (item.managerAccess && role === "manager")) &&
@@ -35,22 +35,20 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
     <aside
       id="crm-navigation"
       aria-label="Main navigation"
-      className={`crm-sidebar fixed left-0 top-0 z-[1000] flex h-screen flex-col border-r border-slate-200/70 bg-white/90 backdrop-blur-xl transition-[width] duration-300 ease-out ${
-        mobileOpen
+      className={`crm-sidebar fixed left-0 top-0 z-[1000] flex h-screen flex-col border-r border-slate-200/70 bg-white/90 backdrop-blur-xl transition-[width] duration-300 ease-out ${mobileOpen
           ? "w-[260px] min-w-[260px] px-3.5"
           : "w-[70px] min-w-[70px] px-2 min-[769px]:w-[250px] min-[769px]:min-w-[250px] min-[769px]:px-3.5"
-      } py-6`}
+        } py-6`}
     >
       {/* Brand */}
       <div
-        className={`flex items-center gap-3 px-2 pb-6 ${
-          showLabels ? "" : "justify-center min-[769px]:justify-start"
-        }`}
+        className={`flex items-center gap-3 px-2 pb-6 ${showLabels ? "" : "justify-center min-[769px]:justify-start"
+          }`}
       >
         <img
-          src="/logo.jpeg"
+          src="/logo.png"
           alt="Creative Crew logo"
-          className="h-10 w-10 shrink-0 rounded-xl object-cover shadow-lg shadow-indigo-500/30"
+          className="h-10 w-10 shrink-0 rounded-xl bg-gray-400 object-contain p-1.5 shadow-lg shadow-indigo-500/20"
         />
         <div className={textBlockClass}>
           <h2 className="text-[17px] font-bold leading-tight tracking-tight text-slate-900">Creative Crew</h2>
@@ -63,9 +61,8 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
       {/* Navigation */}
       <div className="mt-2 flex-1 overflow-y-auto">
         <p
-          className={`mx-3 mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 ${
-            showLabels ? "" : "hidden min-[769px]:block"
-          }`}
+          className={`mx-3 mb-3 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 ${showLabels ? "" : "hidden min-[769px]:block"
+            }`}
         >
           Main Menu
         </p>
@@ -79,12 +76,10 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
               onClick={onNavigate}
               title={!mobileOpen ? item.name : undefined}
               className={({ isActive }) =>
-                `group relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium no-underline transition-all duration-200 ${
-                  showLabels ? "" : "justify-center px-0 min-[769px]:justify-start min-[769px]:px-3"
-                } ${
-                  isActive
-                    ? "bg-indigo-50 text-indigo-700 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.12)]"
-                    : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-900"
+                `group relative flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium no-underline transition-all duration-200 ${showLabels ? "" : "justify-center px-0 min-[769px]:justify-start min-[769px]:px-3"
+                } ${isActive
+                  ? "bg-indigo-50 text-indigo-700 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.12)]"
+                  : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-900"
                 }`
               }
             >
@@ -92,16 +87,14 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
                 <>
                   {/* Active indicator bar */}
                   <span
-                    className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500 transition-opacity duration-200 ${
-                      isActive ? "opacity-100" : "opacity-0"
-                    }`}
+                    className={`absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-500 transition-opacity duration-200 ${isActive ? "opacity-100" : "opacity-0"
+                      }`}
                   />
                   <span
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 ${
-                      isActive
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors duration-200 ${isActive
                         ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/25"
                         : "text-slate-400 group-hover:text-slate-700"
-                    }`}
+                      }`}
                   >
                     <Icon name={item.icon} size={17} />
                   </span>
@@ -116,9 +109,8 @@ function Sidebar({ mobileOpen = false, onNavigate = () => {}, userName = "CRM Us
       {/* User footer */}
       <div className="mt-4 border-t border-slate-200/70 pt-4">
         <div
-          className={`flex items-center gap-3 rounded-xl p-2 transition hover:bg-slate-100/80 ${
-            showLabels ? "" : "justify-center min-[769px]:justify-start"
-          }`}
+          className={`flex items-center gap-3 rounded-xl p-2 transition hover:bg-slate-100/80 ${showLabels ? "" : "justify-center min-[769px]:justify-start"
+            }`}
         >
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-800 to-slate-600 text-[12px] font-bold text-white ring-2 ring-white shadow-sm">
             {initials || "U"}
