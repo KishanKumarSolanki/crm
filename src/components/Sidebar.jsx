@@ -1,4 +1,5 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { useState } from "react";
 import Icon from "./Icon";
 
 const menuItems = [
@@ -12,7 +13,12 @@ const menuItems = [
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },
 ];
 
-function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM User", role = "" }) {
+function Sidebar({ mobileOpen = false, onNavigate = () => { }, onLogout = () => { }, userName = "CRM User", role = "" }) {
+  const location = useLocation();
+  const [broadcastExpanded, setBroadcastExpanded] = useState(null);
+  const isBroadcastExpanded = broadcastExpanded ?? location.pathname === "/broadcasting";
+  const selectedBroadcastTab = new URLSearchParams(location.search).get("tab") || "history";
+
   const visibleItems = menuItems.filter(
     (item) =>
       (!item.adminOnly || role === "admin" || (item.managerAccess && role === "manager")) &&
@@ -35,9 +41,9 @@ function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM U
     <aside
       id="crm-navigation"
       aria-label="Main navigation"
-      className={`crm-sidebar fixed left-0 top-0 z-[1000] flex h-screen flex-col border-r border-slate-200/70 bg-white/90 backdrop-blur-xl transition-[width] duration-300 ease-out ${mobileOpen
+      className={`crm-sidebar fixed left-0 top-0 z-[1000] flex h-screen flex-col border-r border-slate-200/70 bg-white/90 backdrop-blur-xl transition-[width,transform] duration-300 ease-out ${mobileOpen
           ? "w-[260px] min-w-[260px] px-3.5"
-          : "w-[70px] min-w-[70px] px-2 min-[769px]:w-[250px] min-[769px]:min-w-[250px] min-[769px]:px-3.5"
+          : "w-[70px] min-w-[70px] -translate-x-full px-2 min-[769px]:w-[250px] min-[769px]:min-w-[250px] min-[769px]:translate-x-0 min-[769px]:px-3.5"
         } py-6`}
     >
       {/* Brand */}
@@ -69,6 +75,50 @@ function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM U
 
         <nav className="flex flex-col gap-1">
           {visibleItems.map((item) => (
+            item.path === "/broadcasting" ? (
+            <div key={item.path}>
+              <button
+                type="button"
+                aria-expanded={isBroadcastExpanded}
+                onClick={() => setBroadcastExpanded(!isBroadcastExpanded)}
+                title={!mobileOpen ? item.name : undefined}
+                className={`group relative flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-medium transition-all duration-200 ${showLabels ? "" : "justify-center px-0 min-[769px]:justify-start min-[769px]:px-3"
+                  } ${location.pathname === item.path
+                    ? "bg-indigo-50 text-indigo-700 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.12)]"
+                    : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-900"
+                  }`}
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+                  <Icon name={item.icon} size={17} />
+                </span>
+                <span className={`${labelClass} flex-1 truncate`}>{item.name}</span>
+                <span className={`${labelClass} text-xs transition-transform ${isBroadcastExpanded ? "rotate-180" : ""}`}>⌄</span>
+              </button>
+              {isBroadcastExpanded && (
+                <div className="ml-3 mt-1 flex flex-col gap-1 border-l border-slate-200 pl-3">
+                  {[
+                    { id: "email", name: "Email", icon: "mail" },
+                    { id: "whatsapp", name: "WhatsApp", icon: "whatsapp" },
+                  ].map((subItem) => (
+                    <NavLink
+                      key={subItem.id}
+                      to={`/broadcasting?tab=${subItem.id}`}
+                      onClick={onNavigate}
+                      className={({ isActive }) =>
+                        `flex h-10 items-center gap-2.5 rounded-lg px-2.5 text-xs font-medium no-underline transition ${isActive && selectedBroadcastTab === subItem.id
+                          ? "bg-indigo-50 text-indigo-700"
+                          : "text-slate-500 hover:bg-slate-100/80 hover:text-slate-900"
+                        }`
+                      }
+                    >
+                      <Icon name={subItem.icon} size={15} />
+                      <span className="truncate">{subItem.name}</span>
+                    </NavLink>
+                  ))}
+                </div>
+              )}
+            </div>
+            ) : (
             <NavLink
               key={item.path}
               to={item.path}
@@ -102,6 +152,7 @@ function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM U
                 </>
               )}
             </NavLink>
+            )
           ))}
         </nav>
       </div>
@@ -123,6 +174,21 @@ function Sidebar({ mobileOpen = false, onNavigate = () => { }, userName = "CRM U
             </span>
           </div>
         </div>
+        {showLabels && (
+          <button
+            type="button"
+            onClick={() => {
+              onNavigate();
+              onLogout();
+            }}
+            className="mt-2 flex h-11 w-full items-center gap-3 rounded-xl px-3 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center">
+              <Icon name="logout" size={17} />
+            </span>
+            <span>Logout</span>
+          </button>
+        )}
       </div>
     </aside>
   );

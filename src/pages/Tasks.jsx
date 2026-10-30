@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
+import Icon from "../components/Icon";
 
 const dateInputValue = (value) => {
   if (!value) return "";
@@ -15,6 +16,7 @@ export default function Tasks() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [taskFormOpen, setTaskFormOpen] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [title, setTitle] = useState("");
@@ -125,6 +127,7 @@ export default function Tasks() {
     resetForm();
     await fetchTasks();
     setSaving(false);
+    setTaskFormOpen(false);
   };
 
   const beginEdit = (task) => {
@@ -135,6 +138,7 @@ export default function Tasks() {
     setPriority(task.priority || "normal");
     setInstructions(task.instructions || "");
     setError("");
+    setTaskFormOpen(true);
   };
 
   const toggleComplete = async (task) => {
@@ -207,42 +211,94 @@ export default function Tasks() {
     "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100";
 
   return (
-    <div className="w-full text-slate-900">
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
+    <div className="w-full rounded-2xl border border-slate-200/80 bg-white p-[10px] text-slate-900 shadow-sm sm:p-5">
+      <header className="mb-5 flex flex-col gap-4 p-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">CRM Management</p>
+          <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1.5 text-xs text-slate-400">
+            <Link to="/" className="no-underline transition hover:text-slate-700">CRM</Link>
+            <span className="text-slate-300">/</span>
+            <span className="font-medium text-slate-600">Tasks</span>
+          </nav>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">Tasks & Follow-ups</h1>
-          <p className="mt-2 text-sm text-slate-500">Create follow-ups for leads, set priorities, and track completion.</p>
+          <p className="mt-1.5 text-sm text-slate-500">Create follow-ups for leads, set priorities, and track completion.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setLoading(true);
-            fetchTasks();
-          }}
-          disabled={loading}
-          className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
-        >
-          {loading ? "Refreshing..." : "Refresh"}
-        </button>
-      </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              fetchTasks();
+            }}
+            disabled={loading}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {loading ? "Refreshing..." : "Refresh"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              resetForm();
+              setError("");
+              setTaskFormOpen(true);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 transition hover:from-indigo-600 hover:to-violet-700"
+          >
+            <Icon name="plus" size={16} />
+            Add Task
+          </button>
+        </div>
+      </header>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
         {[
           ["Total Tasks", tasks.length, "text-slate-900"],
           ["Pending Tasks", pendingCount, "text-amber-600"],
           ["Completed Tasks", completedCount, "text-emerald-600"],
         ].map(([label, value, tone]) => (
-          <div key={label} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <p className="text-sm font-medium text-slate-500">{label}</p>
-            <p className={`mt-3 text-3xl font-bold ${tone}`}>{value}</p>
+          <div key={label} className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+            <p className="text-xs font-medium text-slate-500 sm:text-sm">{label}</p>
+            <p className={`mt-2 text-2xl font-bold sm:mt-3 sm:text-3xl ${tone}`}>{value}</p>
           </div>
         ))}
       </div>
 
-      <form onSubmit={saveTask} className="mb-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-base font-bold">{editingId ? "Edit Task" : "Create Task"}</h2>
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[2fr_1.5fr_1fr_0.9fr_auto_auto]">
+      {taskFormOpen && (
+        <div
+          className="fixed inset-0 z-[1100] flex items-center justify-center bg-slate-950/45 p-3 sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) {
+              resetForm();
+              setTaskFormOpen(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="task-form-title"
+            className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 shadow-xl sm:p-6"
+          >
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <h2 id="task-form-title" className="text-base font-bold">{editingId ? "Edit Task" : "Create Task"}</h2>
+              <button
+                type="button"
+                aria-label="Close task form"
+                onClick={() => {
+                  if (saving) return;
+                  resetForm();
+                  setTaskFormOpen(false);
+                  setError("");
+                }}
+                disabled={saving}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50"
+              >
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+            {error && <div role="alert" className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+            <form onSubmit={saveTask}>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="text-xs font-semibold text-slate-600">
             Task title
             <input
@@ -275,28 +331,41 @@ export default function Tasks() {
               ))}
             </select>
           </label>
-          <label className="text-xs font-semibold text-slate-600 md:col-span-2 xl:col-span-2">
+          <label className="text-xs font-semibold text-slate-600 sm:col-span-2">
             Instructions
             <textarea className={`${inputClass} mt-1.5 h-10 min-h-10 py-2`} value={instructions} onChange={(event) => setInstructions(event.target.value)} maxLength={2000} placeholder="Add task context" />
           </label>
-          <button
-            type="submit"
-            disabled={saving || leads.length === 0}
-            className="self-end rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? "Saving..." : editingId ? "Save Changes" : "Add Task"}
-          </button>
-          {editingId && (
-            <button type="button" onClick={resetForm} className="self-end rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
-              Cancel
-            </button>
-          )}
+                <div className="flex flex-col-reverse gap-2 sm:col-span-2 sm:flex-row sm:justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (saving) return;
+                      resetForm();
+                      setTaskFormOpen(false);
+                      setError("");
+                    }}
+                    disabled={saving}
+                    className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving || leads.length === 0}
+                    className="rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-500/20 hover:from-indigo-600 hover:to-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {saving ? "Saving..." : editingId ? "Save Changes" : "Create Task"}
+                  </button>
+                </div>
+              </div>
+              {leads.length === 0 && !loading && <p className="mt-3 text-xs text-amber-700">Add a lead before creating a task.</p>}
+            </form>
+          </section>
         </div>
-        {leads.length === 0 && !loading && <p className="mt-3 text-xs text-amber-700">Add a lead before creating a task.</p>}
-      </form>
+      )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+      <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <div>
             <h2 className="text-base font-bold">All Tasks</h2>
             <p className="mt-1 text-xs text-slate-500">Tasks are ordered by due date.</p>
@@ -311,21 +380,21 @@ export default function Tasks() {
           </label>
         </div>
 
-        {error && <div role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {error && !taskFormOpen && <div role="alert" className="m-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
         {loading ? (
           <div className="p-12 text-center text-sm text-slate-500">Loading tasks...</div>
         ) : visibleTasks.length === 0 ? (
-          <div className="p-12 text-center text-sm text-slate-500">
-            {tasks.length === 0 ? "No tasks yet. Create a task above." : "No tasks match this status."}
+          <div className="p-8 text-center text-sm text-slate-500 sm:p-12">
+            {tasks.length === 0 ? "No tasks yet. Select Add Task to create one." : "No tasks match this status."}
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto overscroll-contain">
             {visibleTasks.map((task) => {
               const linkedLead = leadById.get(String(task.client_id));
               const completed = task.status?.toLowerCase() === "completed";
               const overdue = !completed && task.due_date && new Date(task.due_date) < new Date();
               return (
-                <article key={task.id} className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+                <article key={task.id} className="flex flex-col gap-3 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="min-w-0">
                     <h3 className={`break-words text-sm font-semibold ${completed ? "text-slate-500 line-through" : "text-slate-900"}`}>
                       {task.title || "Untitled Task"}

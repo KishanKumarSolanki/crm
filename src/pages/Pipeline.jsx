@@ -134,7 +134,7 @@ export default function Pipeline() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6 lg:p-8">
+    <div className="min-h-screen rounded-2xl border border-slate-200/80 bg-white p-[10px] shadow-sm sm:p-5">
 
       {/* Page Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -214,12 +214,10 @@ export default function Pipeline() {
                 <Droppable droppableId={stage} key={stage}>
                   {(provided, snapshot) => (
                     <section
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`min-h-[320px] rounded-2xl border p-3 transition-colors sm:p-4 ${
+                      className={`flex h-[420px] flex-col rounded-2xl border p-3 transition-colors sm:p-4 ${
                         snapshot.isDraggingOver
                           ? "border-indigo-300 bg-indigo-50/70"
-                          : "border-slate-200 bg-slate-100/70"
+                          : "border-slate-200 bg-white"
                       }`}
                     >
 
@@ -244,7 +242,11 @@ export default function Pipeline() {
                       </div>
 
                       {/* Lead Cards */}
-                      <div className="flex flex-col gap-3">
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1"
+                      >
 
                         {stageLeads.map((lead, index) => (
                           <Draggable
@@ -260,7 +262,7 @@ export default function Pipeline() {
                                 style={{
                                   ...provided.draggableProps.style,
                                 }}
-                                className={`group rounded-xl border bg-white p-4 transition-shadow ${
+                                className={`group rounded-xl border bg-white p-3 transition-shadow ${
                                   snapshot.isDragging
                                     ? "border-indigo-300 shadow-xl"
                                     : "border-slate-200 shadow-sm hover:border-indigo-200 hover:shadow-md"
@@ -269,7 +271,7 @@ export default function Pipeline() {
 
                                 <div className="flex items-start gap-3">
 
-                                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold uppercase text-slate-600">
+                                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-sm font-bold uppercase text-slate-600">
                                     {lead.name
                                       ?.trim()
                                       ?.charAt(0) || "C"}
@@ -280,28 +282,12 @@ export default function Pipeline() {
                                       {lead.name || "Unnamed Lead"}
                                     </h3>
 
-                                    <p className="mt-1 text-xs text-slate-400">
-                                      Lead #{lead.id}
-                                    </p>
                                     {lead.service_name && <p className="mt-2 text-xs font-medium text-violet-700">{lead.service_name}</p>}
                                     {lead.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {new Date(lead.next_follow_up).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</p>}
                                   </div>
 
                                   <span className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-500">
                                     ⠿
-                                  </span>
-                                </div>
-
-                                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
-
-                                  <span
-                                    className={`rounded-md px-2 py-1 text-[10px] font-semibold uppercase ${style.badge}`}
-                                  >
-                                    {stageLabels[stage]}
-                                  </span>
-
-                                  <span className="text-[10px] text-slate-400">
-                                    Drag to move
                                   </span>
                                 </div>
 

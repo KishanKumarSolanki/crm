@@ -152,7 +152,7 @@ const SkeletonBlock = ({ className = "" }) => (
 const LoadingSkeleton = () => (
   <div className="w-full space-y-5">
     <SkeletonBlock className="h-16" />
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
       {[0, 1, 2, 3].map((i) => <SkeletonBlock key={i} className="h-24" />)}
     </div>
     <SkeletonBlock className="h-64" />
@@ -758,7 +758,7 @@ export default function Leads() {
           <p className="mt-1.5 text-sm text-slate-500">Manage your leads, pipeline and relationships.</p>
         </div>
 
-        <div className="flex flex-col items-stretch gap-2 self-start sm:self-auto">
+        <div className="flex flex-row items-center gap-2 self-start sm:flex-col sm:items-stretch sm:self-auto">
           <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm">
             <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Total</span>
             <strong className="text-xl font-bold text-slate-900">{stats.total}</strong>
@@ -766,7 +766,7 @@ export default function Leads() {
           <button
             type="button"
             onClick={() => setShowAddLead(true)}
-            className={`${btnPrimary} w-full`}
+            className={`${btnPrimary} w-auto sm:w-full`}
           >
             <Icon name="plus" size={15} />
             Add lead
@@ -775,7 +775,7 @@ export default function Leads() {
       </header>
 
       {/* STATS */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statCards.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
@@ -803,25 +803,18 @@ export default function Leads() {
             </div>
             <div>
               <h2 id="add-lead-title" className="text-[15px] font-bold tracking-tight">Add new lead</h2>
-              <p className="mt-0.5 text-xs text-slate-500">Creates a lead, a follow-up task and an activity record.</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-              Automation active
-            </span>
-            <button
-              type="button"
-              aria-label="Close add lead dialog"
-              onClick={() => !loading && setShowAddLead(false)}
-              className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50"
-              disabled={loading}
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
         </div>
+        <button
+          type="button"
+          aria-label="Close add lead dialog"
+          onClick={() => !loading && setShowAddLead(false)}
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-500 transition hover:bg-slate-50 hover:text-slate-800 disabled:opacity-50 sm:right-6 sm:top-6"
+          disabled={loading}
+        >
+          <Icon name="close" size={16} />
+        </button>
 
         <form onSubmit={(event) => { event.preventDefault(); void addLead() }}>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -1063,30 +1056,30 @@ export default function Leads() {
               />
             </div>
 
-            <select
-              aria-label="Filter by stage"
-              value={stageFilter}
-              onChange={(e) => {
-                setStageFilter(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
-            >
-              {STAGE_FILTER_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <select
+                aria-label="Filter by stage"
+                value={stageFilter}
+                onChange={(e) => {
+                  setStageFilter(e.target.value)
+                  setPage(1)
+                }}
+                className="h-10 min-w-0 flex-1 cursor-pointer rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:px-3 sm:text-sm"
+              >
+                {STAGE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
 
-            <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setShowImportCategory(true)}
                 disabled={importing}
-                className={`${btnGhost} h-10 ${importing ? "cursor-wait opacity-60" : ""}`}
+                className={`${btnGhost} h-10 px-2 text-[10px] sm:px-3 sm:text-xs ${importing ? "cursor-wait opacity-60" : ""}`}
               >
-                <Icon name="plus" size={14} />
+                <Icon name="plus" size={12} />
                 {importing ? "Importing..." : "Upload Excel"}
               </button>
               <input
@@ -1099,7 +1092,7 @@ export default function Leads() {
                 className="hidden"
               />
 
-              <button type="button" onClick={exportLeadsToCsv} className={`${btnGhost} h-10`}>
+              <button type="button" onClick={exportLeadsToCsv} className={`${btnGhost} h-10 px-2 text-[10px] sm:px-3 sm:text-xs`}>
                 Export CSV
               </button>
             </div>

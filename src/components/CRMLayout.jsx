@@ -168,12 +168,13 @@ function CRMLayout() {
       <Sidebar
         mobileOpen={mobileMenu}
         onNavigate={() => setMobileMenu(false)}
+        onLogout={handleLogout}
         userName={userName}
         role={profile?.role}
       />
-      <div className="ml-[70px] min-h-screen min-[769px]:ml-[250px]">
-        <header className="sticky top-0 z-[900] flex h-[68px] items-center justify-between border-b border-gray-200 bg-white px-3 min-[481px]:px-4 min-[769px]:h-[76px] min-[769px]:px-[30px]">
-          <div className="flex items-center gap-3">
+      <div className="min-h-screen min-w-0 ml-0 min-[769px]:ml-[250px]">
+        <header className="sticky top-0 z-[900] flex h-[68px] items-center justify-between gap-2 border-b border-gray-200 bg-white px-3 min-[481px]:px-4 min-[769px]:h-[76px] min-[769px]:px-[30px]">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
               type="button"
               aria-label={mobileMenu ? "Close navigation menu" : "Open navigation menu"}
@@ -183,13 +184,13 @@ function CRMLayout() {
             >
               <Icon name={mobileMenu ? "close" : "menu"} size={19} />
             </button>
-            <div>
-              <h1 className="text-[18px] font-bold leading-tight text-gray-900 min-[769px]:text-[22px]">{getPageTitle()}</h1>
+            <div className="min-w-0">
+              <h1 className="truncate text-[18px] font-bold leading-tight text-gray-900 min-[769px]:text-[22px]">{getPageTitle()}</h1>
               <p className="mt-1 hidden text-xs text-gray-400 min-[769px]:block">Manage your business from one place</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 min-[769px]:gap-3">
+          <div className="flex shrink-0 items-center gap-2 min-[769px]:gap-3">
             <div ref={searchRef} className="relative">
               <div className="hidden h-[38px] w-[200px] items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 min-[650px]:flex min-[1001px]:w-[240px]">
                 <Icon name="search" size={17} className="text-gray-400" />

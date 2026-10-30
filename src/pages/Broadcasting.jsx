@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { useSearchParams } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import Icon from "../components/Icon"
 
 const tabs = [
-  { id: "email", label: "Email", icon: "mail" },
-  { id: "whatsapp", label: "WhatsApp", icon: "whatsapp" },
   { id: "history", label: "Campaign history", icon: "clock" },
   { id: "reports", label: "Reports", icon: "chart" },
 ]
@@ -86,7 +85,11 @@ function MetricCard({ label, value, detail, icon, tone = "indigo" }) {
 }
 
 function Broadcasting() {
-  const [activeTab, setActiveTab] = useState("email")
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get("tab")
+  const activeTab = ["email", "whatsapp", "history", "reports"].includes(requestedTab) ? requestedTab : "history"
+  const setActiveTab = (tab) => setSearchParams({ tab })
+  const channel = activeTab === "whatsapp" ? "whatsapp" : "email"
   const [clients, setClients] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [recipientStats, setRecipientStats] = useState([])
@@ -97,7 +100,6 @@ function Broadcasting() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [notice, setNotice] = useState("")
-  const [channel, setChannel] = useState("email")
   const [campaignName, setCampaignName] = useState("")
   const [subject, setSubject] = useState("")
   const [bodyHtml, setBodyHtml] = useState("")
@@ -146,11 +148,6 @@ function Broadcasting() {
   const changeFilter = (key, value) => {
     setVisibleClientCount(100)
     setFilters((current) => ({ ...current, [key]: value }))
-  }
-
-  const changeChannel = (nextChannel) => {
-    setVisibleClientCount(100)
-    setChannel(nextChannel)
   }
 
   const eligible = useCallback((client) => channel === "email"
@@ -212,7 +209,7 @@ function Broadcasting() {
   const editCampaign = (campaign) => {
     if (campaign.status !== "draft") return
     setActiveTab(campaign.channel)
-    changeChannel(campaign.channel)
+    setVisibleClientCount(100)
     setCampaignName(campaign.name || "")
     setSubject(campaign.subject || "")
     setBodyHtml(campaign.body_html || "")
@@ -494,15 +491,15 @@ function Broadcasting() {
     : campaigns
 
   return (
-    <div className="mx-auto max-w-[1500px]">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div><p className="text-xs font-bold uppercase tracking-[.16em] text-indigo-600">Client communications</p><h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Broadcasting</h1><p className="mt-2 max-w-2xl text-sm text-slate-500">Create permission-aware campaigns, review recipients, and follow delivery from one place.</p></div>
-        <div className="flex items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800"><span className="h-2 w-2 rounded-full bg-emerald-500" />Consent checks are on</div>
+    <div className="mx-auto w-full min-w-0 max-w-[1500px] rounded-2xl border border-slate-200/80 bg-white p-[10px] shadow-sm sm:p-5">
+      <div className="mb-5 flex min-w-0 flex-col items-start justify-between gap-3 sm:mb-6 sm:flex-row sm:items-end sm:gap-4">
+        <div className="min-w-0"><p className="text-xs font-bold uppercase tracking-[.16em] text-indigo-600">Client communications</p><h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Broadcasting</h1><p className="mt-1.5 max-w-2xl text-sm text-slate-500 sm:mt-2">Create permission-aware campaigns, review recipients, and follow delivery from one place.</p></div>
+        <div className="inline-flex max-w-full items-center gap-2 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-800"><span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />Consent checks are on</div>
       </div>
 
       {(error || notice) && <div role={error ? "alert" : "status"} className={`mb-5 rounded-xl border px-4 py-3 text-sm ${error ? "border-rose-200 bg-rose-50 text-rose-700" : "border-emerald-200 bg-emerald-50 text-emerald-800"}`}>{error || notice}<button type="button" className="float-right font-semibold" onClick={() => { setError(""); setNotice("") }} aria-label="Dismiss">×</button></div>}
 
-      <section className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="mb-4 grid grid-cols-2 gap-3 sm:mb-5 sm:gap-4 xl:grid-cols-4">
         <MetricCard label="Recipients" value={campaignMetrics.total.toLocaleString()} detail="Across all campaigns" icon="leads" />
         <MetricCard label="Messages sent" value={campaignMetrics.sent.toLocaleString()} detail="Accepted by the provider" icon="send" tone="violet" />
         <MetricCard label="Delivered" value={campaignMetrics.delivered.toLocaleString()} detail="Provider-confirmed statuses, currently WhatsApp" icon="check" tone="emerald" />
@@ -513,7 +510,7 @@ function Broadcasting() {
 
       <section className={`${cardClass} overflow-hidden`}>
         <div className="flex gap-1 overflow-x-auto border-b border-slate-100 px-3 pt-3 sm:px-5">
-          {tabs.map((tab) => <button key={tab.id} type="button" disabled={Boolean(editingCampaignId && (tab.id === "email" || tab.id === "whatsapp") && tab.id !== channel)} onClick={() => { setActiveTab(tab.id); if (tab.id === "email" || tab.id === "whatsapp") changeChannel(tab.id) }} className={`inline-flex shrink-0 items-center gap-2 rounded-t-xl border-b-2 px-3 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${activeTab === tab.id ? "border-indigo-500 bg-indigo-50/70 text-indigo-700" : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}><Icon name={tab.icon} size={16} />{tab.label}</button>)}
+          {tabs.map((tab) => <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`inline-flex shrink-0 items-center gap-2 rounded-t-xl border-b-2 px-3 py-3 text-sm font-semibold transition ${activeTab === tab.id ? "border-indigo-500 bg-indigo-50/70 text-indigo-700" : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"}`}><Icon name={tab.icon} size={16} />{tab.label}</button>)}
         </div>
 
         {loading ? <div className="p-12 text-center text-sm text-slate-500">Loading campaigns and clients…</div> : <>
@@ -560,7 +557,7 @@ function Broadcasting() {
             </div>
           </div>}
 
-          {activeTab === "history" && <div className="grid min-w-0 xl:grid-cols-[minmax(0,1fr)_minmax(360px,.9fr)]"><div className="min-w-0 border-b border-slate-100 xl:border-b-0 xl:border-r"><div className="flex items-center justify-between gap-3 px-5 py-4"><div><h2 className="font-bold text-slate-900">Campaign history</h2><p className="mt-1 text-xs text-slate-500">Review delivery, open a report, or continue a draft.</p></div>{campaigns.some((campaign) => ["queued", "processing"].includes(campaign.status)) && <button type="button" onClick={processQueue} disabled={saving} className={ghostButtonClass}><Icon name="send" size={15} />Process queue</button>}<button type="button" onClick={loadData} className={ghostButtonClass}><Icon name="refresh" size={15} />Refresh</button></div><div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr>{["Campaign", "Channel", "Recipients", "Status", "Created"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{currentCampaigns.map((campaign) => <tr key={campaign.id} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${historyCampaign?.id === campaign.id ? "bg-indigo-50/50" : ""}`} onClick={() => loadCampaignRecipients(campaign)}><td className="px-4 py-3.5"><strong className="block max-w-[230px] truncate text-slate-800">{campaign.name}</strong><span className="mt-0.5 block text-xs text-slate-400">{campaign.subject || campaign.template_name || "Campaign"}</span></td><td className="px-4 py-3.5 capitalize text-slate-600">{campaign.channel}</td><td className="px-4 py-3.5 tabular-nums text-slate-600">{campaign.recipient_count}</td><td className="px-4 py-3.5"><StatusPill status={campaign.status} /></td><td className="px-4 py-3.5 text-xs text-slate-500">{dateLabel(campaign.created_at)}</td></tr>)}{currentCampaigns.length === 0 && <tr><td className="px-4 py-12 text-center text-slate-400" colSpan="5">No campaigns yet. Compose one from the Email or WhatsApp tab.</td></tr>}</tbody></table></div></div>
+          {activeTab === "history" && <div className="grid min-w-0 xl:grid-cols-[minmax(0,1fr)_minmax(360px,.9fr)]"><div className="min-w-0 border-b border-slate-100 xl:border-b-0 xl:border-r"><div className="flex items-center justify-between gap-3 px-5 py-4"><div><h2 className="font-bold text-slate-900">Campaign history</h2><p className="mt-1 text-xs text-slate-500">Review delivery, open a report, or continue a draft.</p></div>{campaigns.some((campaign) => ["queued", "processing"].includes(campaign.status)) && <button type="button" onClick={processQueue} disabled={saving} className={ghostButtonClass}><Icon name="send" size={15} />Process queue</button>}<button type="button" onClick={loadData} className={ghostButtonClass}><Icon name="refresh" size={15} />Refresh</button></div><div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50 text-[10px] uppercase tracking-wide text-slate-500"><tr>{["Campaign", "Channel", "Recipients", "Status", "Created"].map((heading) => <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>)}</tr></thead><tbody>{currentCampaigns.map((campaign) => <tr key={campaign.id} className={`cursor-pointer border-t border-slate-100 hover:bg-slate-50 ${historyCampaign?.id === campaign.id ? "bg-indigo-50/50" : ""}`} onClick={() => loadCampaignRecipients(campaign)}><td className="px-4 py-3.5"><strong className="block max-w-[230px] truncate text-slate-800">{campaign.name}</strong><span className="mt-0.5 block text-xs text-slate-400">{campaign.subject || campaign.template_name || "Campaign"}</span></td><td className="px-4 py-3.5 capitalize text-slate-600">{campaign.channel}</td><td className="px-4 py-3.5 tabular-nums text-slate-600">{campaign.recipient_count}</td><td className="px-4 py-3.5"><StatusPill status={campaign.status} /></td><td className="px-4 py-3.5 text-xs text-slate-500">{dateLabel(campaign.created_at)}</td></tr>)}{currentCampaigns.length === 0 && <tr><td className="px-4 py-12 text-center text-slate-400" colSpan="5">No campaigns yet. Compose one from the Email or WhatsApp options in the sidebar.</td></tr>}</tbody></table></div></div>
             <div className="min-w-0 p-4 sm:p-6">{!historyCampaign ? <div className="flex min-h-56 flex-col items-center justify-center text-center"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600"><Icon name="chart" size={20} /></div><h3 className="mt-3 text-sm font-bold text-slate-800">Campaign report</h3><p className="mt-1 max-w-xs text-xs leading-5 text-slate-400">Select a campaign to view each recipient's latest delivery status and any provider error.</p></div> : <><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-indigo-600">{historyCampaign.channel} campaign</p><h3 className="mt-1 text-lg font-bold text-slate-900">{historyCampaign.name}</h3><p className="mt-1 text-xs text-slate-500">{historyCampaign.recipient_count} recipients · {historyCampaign.subject || historyCampaign.template_name || "No subject"}</p></div><div className="flex gap-2">{historyCampaign.status === "draft" && <button type="button" onClick={() => editCampaign(historyCampaign)} className={ghostButtonClass}>Edit draft</button>}{historyCampaign.status === "scheduled" && <button type="button" onClick={() => sendStatus(historyCampaign)} disabled={saving} className={buttonClass}>Send now</button>}</div></div><div className="mt-4 flex flex-wrap gap-2"><StatusPill status={historyCampaign.status} /><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium text-slate-500">{historyCampaign.scheduled_at ? `Scheduled ${dateLabel(historyCampaign.scheduled_at)}` : `Created ${dateLabel(historyCampaign.created_at)}`}</span></div><div className="mt-5 overflow-hidden rounded-xl border border-slate-100"><div className="flex items-center justify-between border-b border-slate-100 px-3 py-3"><h4 className="text-xs font-bold uppercase tracking-wide text-slate-500">Recipients</h4><span className="text-xs text-slate-400">{historyRecipients.length}</span></div><div className="max-h-[440px] overflow-y-auto divide-y divide-slate-100">{historyLoading ? <p className="p-6 text-center text-xs text-slate-400">Loading delivery records…</p> : historyRecipients.map((recipient) => <div key={recipient.id} className="px-3 py-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><strong className="block truncate text-xs text-slate-800">{recipient.client_name}</strong><span className="mt-0.5 block truncate text-[11px] text-slate-400">{recipient.email || recipient.phone || "No contact"}{recipient.company ? ` · ${recipient.company}` : ""}</span></div><StatusPill status={recipient.status} /></div>{recipient.error_message && <p className="mt-2 break-words rounded-lg bg-rose-50 px-2.5 py-2 text-[11px] leading-4 text-rose-700">{recipient.error_message}</p>}<p className="mt-1 text-[10px] text-slate-400">{recipient.sent_at ? `Sent ${dateLabel(recipient.sent_at)}` : `Attempts ${recipient.attempts}`}{recipient.provider_message_id ? ` · ${recipient.provider_message_id}` : ""}</p></div>)}{!historyLoading && historyRecipients.length === 0 && <p className="p-6 text-center text-xs text-slate-400">No recipient records.</p>}</div></div></>}</div></div>}
 
           {activeTab === "reports" && <div className="p-4 sm:p-6"><div className="mb-5"><h2 className="text-lg font-bold text-slate-900">Delivery reports</h2><p className="mt-1 text-xs text-slate-500">Campaign request results and provider status callbacks.</p></div><div className="grid gap-4 xl:grid-cols-2">{["email", "whatsapp"].map((reportChannel) => { const stats = reportCounts[reportChannel]; const deliveredRate = stats.sent ? Math.round(stats.delivered / stats.sent * 100) : 0; const failedRate = stats.sent + stats.failed ? Math.round(stats.failed / (stats.sent + stats.failed) * 100) : 0; return <article key={reportChannel} className={`${cardClass} p-5`}><div className="flex items-center gap-3"><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${reportChannel === "email" ? "bg-indigo-50 text-indigo-600" : "bg-emerald-50 text-emerald-600"}`}><Icon name={reportChannel === "email" ? "mail" : "whatsapp"} size={18} /></div><div><h3 className="font-bold capitalize text-slate-900">{reportChannel}</h3><p className="text-xs text-slate-400">{stats.sent.toLocaleString()} {reportChannel === "email" ? "requests accepted by EmailJS" : "messages sent"}</p></div></div><div className="mt-5 grid grid-cols-2 gap-3"><div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] font-medium text-slate-500">{reportChannel === "email" ? "Delivery status" : "Delivered"}</p><p className="mt-1 text-xl font-bold text-slate-900">{reportChannel === "email" ? "Unavailable" : stats.delivered.toLocaleString()}</p><p className="mt-1 text-[11px] text-emerald-700">{reportChannel === "email" ? "EmailJS does not send delivery callbacks here" : `${deliveredRate}% delivery rate`}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] font-medium text-slate-500">Failed</p><p className="mt-1 text-xl font-bold text-slate-900">{stats.failed.toLocaleString()}</p><p className="mt-1 text-[11px] text-rose-700">{failedRate}% failure rate</p></div>{reportChannel === "whatsapp" && <div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] font-medium text-slate-500">Read</p><p className="mt-1 text-xl font-bold text-slate-900">{stats.read.toLocaleString()}</p><p className="mt-1 text-[11px] text-sky-700">Provider-confirmed reads</p></div>}<div className="rounded-xl bg-slate-50 p-3"><p className="text-[11px] font-medium text-slate-500">Campaigns</p><p className="mt-1 text-xl font-bold text-slate-900">{campaigns.filter((campaign) => campaign.channel === reportChannel).length}</p><p className="mt-1 text-[11px] text-slate-400">Including drafts and scheduled</p></div></div></article> })}</div><div className="mt-5 rounded-xl border border-indigo-100 bg-indigo-50/60 p-4"><h3 className="text-sm font-bold text-indigo-950">How delivery is measured</h3><p className="mt-1 text-xs leading-5 text-indigo-900/70">Email sent means EmailJS accepted the request; this integration does not receive email delivered, bounced, open, or click events. WhatsApp delivery and read statuses come from your Meta webhook subscription.</p></div></div>}

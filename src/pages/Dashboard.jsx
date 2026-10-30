@@ -221,23 +221,23 @@ const LoadingState = () => (
 )
 
 const StatCard = ({ label, value, icon, accent, helper, progress }) => (
-  <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5">
+  <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 sm:p-5">
     <div
       className={`absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12] ${accent.glow}`}
     />
 
     <div className="relative flex items-start justify-between">
-      <span className="text-[13px] font-semibold text-slate-500">{label}</span>
-      <div className={`flex h-10 w-10 items-center justify-center rounded-xl ring-1 ${accent.chip}`}>
-        <Icon name={icon} size={18} />
+      <span className="text-[11px] font-semibold text-slate-500 sm:text-[13px]">{label}</span>
+      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-10 sm:w-10 ${accent.chip}`}>
+        <Icon name={icon} size={16} />
       </div>
     </div>
 
-    <div className="relative mt-4 text-3xl font-bold tracking-tight text-slate-900">{value}</div>
+    <div className="relative mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:mt-4 sm:text-3xl">{value}</div>
 
-    <div className="relative mt-3">
-      <div className="mb-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400">
-        <span>{helper}</span>
+    <div className="relative mt-2 sm:mt-3">
+      <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 sm:text-[11px]">
+        <span className="truncate">{helper}</span>
         <span>{progress}%</span>
       </div>
       <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -503,7 +503,7 @@ export default function Dashboard() {
       </header>
 
       {/* STATS */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statCards.map((card) => (
           <StatCard key={card.label} {...card} />
         ))}
@@ -579,58 +579,6 @@ export default function Dashboard() {
             ))}
           </div>
         </SectionCard>
-      </div>
-
-      {/* PIPELINE + TEAM */}
-      <div className="grid grid-cols-1 gap-5">
-        <SectionCard
-          title="Lead Pipeline"
-          subtitle="Distribution of your leads across stages"
-          action={<ActionLink to="/pipeline">View pipeline →</ActionLink>}
-        >
-          {leads.length === 0 ? (
-            <EmptyState icon="pipeline">No leads in the pipeline yet.</EmptyState>
-          ) : (
-            <>
-              <div className="mb-6 flex h-3 w-full overflow-hidden rounded-full bg-slate-100">
-                {STAGES.map((stage) => {
-                  const count = stageCounts[stage.key]
-                  if (!count) return null
-                  return (
-                    <div
-                      key={stage.key}
-                      className={`${stage.bar} transition-all duration-700 first:rounded-l-full last:rounded-r-full`}
-                      style={{ width: `${pct(count, leads.length)}%` }}
-                      title={`${stage.label}: ${count}`}
-                    />
-                  )
-                })}
-              </div>
-
-              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-                {STAGES.map((stage) => {
-                  const count = stageCounts[stage.key]
-                  return (
-                    <div
-                      key={stage.key}
-                      className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50/60 px-3.5 py-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-2.5">
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${stage.bar}`} />
-                        <span className="truncate text-[13px] font-medium text-slate-700">{stage.label}</span>
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <strong className="text-sm font-bold text-slate-900">{count}</strong>
-                        <span className="text-[11px] text-slate-400">{pct(count, leads.length)}%</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
-        </SectionCard>
-
       </div>
 
       {/* ACTIVITY + RECENT LEADS */}
