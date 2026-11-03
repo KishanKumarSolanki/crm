@@ -138,9 +138,10 @@ function Broadcasting() {
   }, [])
 
   useEffect(() => {
+    if (activeTab === "whatsapp") return
     const timer = window.setTimeout(() => { void loadData() }, 0)
     return () => window.clearTimeout(timer)
-  }, [loadData])
+  }, [activeTab, loadData])
   useEffect(() => {
     if (editorRef.current) editorRef.current.innerHTML = bodyHtmlRef.current || ""
   }, [editorRevision, channel])
@@ -489,6 +490,19 @@ function Broadcasting() {
   const currentCampaigns = activeTab === "email" || activeTab === "whatsapp"
     ? campaigns.filter((campaign) => campaign.channel === activeTab)
     : campaigns
+
+  if (activeTab === "whatsapp") {
+    return (
+      <div className="-mx-3 -mt-4 -mb-[25px] h-[calc(100vh-68px)] min-h-[560px] min-[481px]:-mx-4 min-[481px]:-mt-5 min-[481px]:-mb-[30px] min-[769px]:-mx-[30px] min-[769px]:-mt-7 min-[769px]:-mb-10 min-[769px]:h-[calc(100vh-76px)]">
+        <iframe
+          src="https://chatverse.io/embed/whatsapp/p_geqQJME4_nanPFFeoc"
+          title="WhatsApp Studio"
+          className="h-full min-h-[560px] w-full border-0"
+          allow="clipboard-read; clipboard-write"
+        />
+      </div>
+    )
+  }
 
   return (
     <div className="mx-auto w-full min-w-0 max-w-[1500px] rounded-2xl border border-slate-200/80 bg-white p-[10px] shadow-sm sm:p-5">
