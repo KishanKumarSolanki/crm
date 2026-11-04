@@ -495,7 +495,7 @@ function Broadcasting() {
     return (
       <div className="-mx-3 -mt-4 -mb-[25px] h-[calc(100vh-68px)] min-h-[560px] min-[481px]:-mx-4 min-[481px]:-mt-5 min-[481px]:-mb-[30px] min-[769px]:-mx-[30px] min-[769px]:-mt-7 min-[769px]:-mb-10 min-[769px]:h-[calc(100vh-76px)]">
         <iframe
-          src="https://chatverse.io/embed/whatsapp/p_geqQJME4_nanPFFeoc"
+          src="https://chatverse.io/embed/whatsapp/p_geqQJMEd4_nanPFFeoc"
           title="WhatsApp Studio"
           className="h-full min-h-[560px] w-full border-0"
           allow="clipboard-read; clipboard-write"
