@@ -3,6 +3,7 @@ import { useParams, Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import { sendWelcomeEmailWhenContacted } from "../lib/email"
 import Icon from "../components/Icon"
+import { formatIndiaDate, formatIndiaDateTime, indiaDateTimeInputToISOString } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -85,7 +86,7 @@ const initialOf = (name) => (name ? name.trim().charAt(0).toUpperCase() : "?")
 
 const formatDate = (date) =>
   date
-    ? new Date(date).toLocaleString([], {
+    ? formatIndiaDateTime(date, {
         day: "2-digit",
         month: "short",
         year: "numeric",
@@ -191,6 +192,59 @@ const LoadingState = () => (
   </div>
 )
 
+const NoteContent = ({ text }) => {
+  const lines = String(text || "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean)
+  const appointment = lines.find((line) => /^Appointment Requested:/i.test(line))
+  const details = []
+  const unpaired = []
+  let question = ""
+
+  lines.forEach((line) => {
+    if (line === appointment) return
+    if (line.endsWith("?")) {
+      if (question) unpaired.push(question)
+      question = line
+    } else if (question) {
+      details.push({ question, answer: line })
+      question = ""
+    } else {
+      unpaired.push(line)
+    }
+  })
+  if (question) unpaired.push(question)
+
+  if (!appointment && details.length === 0) {
+    return <div className="rounded-xl border border-indigo-100 border-l-4 border-l-indigo-400 bg-gradient-to-r from-indigo-50/80 to-white px-4 py-3"><p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{text}</p></div>
+  }
+
+  const tones = [
+    "border-violet-100 bg-violet-50/70 text-violet-700",
+    "border-sky-100 bg-sky-50/70 text-sky-700",
+    "border-emerald-100 bg-emerald-50/70 text-emerald-700",
+    "border-amber-100 bg-amber-50/70 text-amber-700",
+  ]
+
+  return (
+    <div className="space-y-2.5">
+      {appointment && (
+        <div className="flex items-start gap-3 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 p-3.5 text-white shadow-sm">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/15"><Icon name="calendar" size={17} /></span>
+          <div className="min-w-0"><p className="text-[10px] font-bold uppercase tracking-wider text-white/75">Requested appointment</p><p className="mt-1 text-sm font-semibold leading-relaxed">{appointment.replace(/^Appointment Requested:\s*/i, "")}</p></div>
+        </div>
+      )}
+      {details.map((detail, index) => (
+        <div key={`${detail.question}-${index}`} className={`rounded-xl border p-3.5 ${tones[index % tones.length]}`}>
+          <p className="text-xs font-semibold leading-relaxed">{detail.question}</p>
+          <p className="mt-1.5 rounded-lg bg-white/80 px-3 py-2 text-sm font-medium text-slate-800">{detail.answer}</p>
+        </div>
+      ))}
+      {unpaired.map((line, index) => (
+        <p key={`${line}-${index}`} className="rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-2.5 text-sm leading-relaxed text-slate-700">{line}</p>
+      ))}
+    </div>
+  )
+}
+
 // =========================
 // PAGE
 // =========================
@@ -214,8 +268,6 @@ export default function LeadDetail() {
   const [savingConversation, setSavingConversation] = useState(false)
   const [revenueAmount, setRevenueAmount] = useState("")
   const [savingRevenue, setSavingRevenue] = useState(false)
-  const [savingConsent, setSavingConsent] = useState(false)
-  const [userRole, setUserRole] = useState("")
 
   // =========================
   // FETCH ALL DATA
@@ -267,18 +319,6 @@ export default function LeadDetail() {
   useEffect(() => {
     fetchAll()
   }, [id])
-
-  useEffect(() => {
-    let active = true
-    const loadRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle()
-      if (active) setUserRole(data?.role || "")
-    }
-    loadRole()
-    return () => { active = false }
-  }, [])
 
   // =========================
   // ACTIONS
@@ -349,17 +389,6 @@ export default function LeadDetail() {
     setSavingRevenue(false)
   }
 
-  const updateConsent = async (field, enabled) => {
-    setSavingConsent(true)
-    const changes = field === "email_marketing_opt_in"
-      ? { email_marketing_opt_in: enabled, email_unsubscribed_at: enabled ? null : new Date().toISOString() }
-      : { whatsapp_opt_in: enabled }
-    const { error } = await supabase.from("clients").update(changes).eq("id", id)
-    if (error) alert(`Could not update messaging consent: ${error.message}`)
-    else setLead((current) => ({ ...current, ...changes }))
-    setSavingConsent(false)
-  }
-
   const addNote = async (e) => {
     e.preventDefault()
     if (!noteText.trim()) return
@@ -384,7 +413,7 @@ export default function LeadDetail() {
     const { error } = await supabase.from("tasks").insert({
       client_id: id,
       title: taskTitle.trim(),
-      due_date: taskDue ? new Date(taskDue) : new Date(Date.now() + 86400000),
+      due_date: taskDue ? indiaDateTimeInputToISOString(`${taskDue}T23:59`) : new Date(Date.now() + 86400000),
       status: "pending",
     })
 
@@ -404,7 +433,7 @@ export default function LeadDetail() {
     if (!conversationText.trim()) return
     setSavingConversation(true)
     const followUpAt = conversationFollowUp
-      ? new Date(conversationFollowUp).toISOString()
+      ? indiaDateTimeInputToISOString(conversationFollowUp)
       : null
 
     const { error: activityError } = await supabase.from("activities").insert({
@@ -482,6 +511,10 @@ export default function LeadDetail() {
   )
 
   const sourceFields = [
+    { label: "Company / institute", value: lead?.company },
+    { label: "Service / course", value: lead?.service_name },
+    { label: "Email", value: lead?.email },
+    { label: "Phone", value: lead?.phone },
     { label: "Lead source", value: lead?.lead_source },
     { label: "Campaign", value: lead?.utm_campaign },
     { label: "UTM source", value: lead?.utm_source },
@@ -621,28 +654,6 @@ export default function LeadDetail() {
         </div>
       </section>
 
-      {userRole === "admin" && (
-        <section className={`${cardClass} mb-5 p-5 sm:p-6`}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-[15px] font-bold tracking-tight text-slate-900">Messaging consent</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-500">Record channel-specific marketing permission provided by this client. Email unsubscribe requests are always honored.</p>
-            </div>
-            {lead.email_unsubscribed_at && <span className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700">Unsubscribed {formatDate(lead.email_unsubscribed_at)}</span>}
-          </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3.5 transition hover:border-indigo-200 hover:bg-indigo-50/30">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={Boolean(lead.email_marketing_opt_in && !lead.email_unsubscribed_at)} disabled={savingConsent} onChange={(event) => updateConsent("email_marketing_opt_in", event.target.checked)} />
-              <span><strong className="block text-xs font-semibold text-slate-800">Email marketing</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Client has agreed to receive email campaigns.</span></span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 p-3.5 transition hover:border-indigo-200 hover:bg-indigo-50/30">
-              <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" checked={Boolean(lead.whatsapp_opt_in)} disabled={savingConsent} onChange={(event) => updateConsent("whatsapp_opt_in", event.target.checked)} />
-              <span><strong className="block text-xs font-semibold text-slate-800">WhatsApp messages</strong><span className="mt-1 block text-[11px] leading-4 text-slate-500">Client has explicitly opted in on WhatsApp.</span></span>
-            </label>
-          </div>
-        </section>
-      )}
-
       {/* STATS */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {statCards.map((item) => (
@@ -690,6 +701,7 @@ export default function LeadDetail() {
                 value={conversationFollowUp}
                 onChange={(e) => setConversationFollowUp(e.target.value)}
               />
+              <p className="mt-1 text-[10px] text-slate-400">India Standard Time (GMT+5:30)</p>
             </div>
 
             <div className="md:col-span-2">
@@ -726,8 +738,8 @@ export default function LeadDetail() {
         </SectionCard>
 
         <SectionCard
-          title="Marketing & sale value"
-          subtitle="Captured from the landing page"
+          title="Lead details & marketing"
+          subtitle="First-step contact details and captured campaign data"
         >
           <div className="grid grid-cols-2 gap-x-4 gap-y-4 p-5 sm:p-6">
             {sourceFields.map((field) => (
@@ -824,12 +836,15 @@ export default function LeadDetail() {
               value={taskTitle}
               onChange={(e) => setTaskTitle(e.target.value)}
             />
-            <input
-              type="date"
-              className={`${inputClass} sm:w-[160px] sm:shrink-0`}
-              value={taskDue}
-              onChange={(e) => setTaskDue(e.target.value)}
-            />
+            <div className="sm:w-[160px] sm:shrink-0">
+              <input
+                type="date"
+                className={inputClass}
+                value={taskDue}
+                onChange={(e) => setTaskDue(e.target.value)}
+              />
+              <span className="mt-1 block text-[10px] text-slate-400">End of day · GMT+5:30</span>
+            </div>
             <button type="submit" className={`${btnPrimary} sm:shrink-0`}>
               <Icon name="plus" size={15} />
               Add
@@ -860,7 +875,7 @@ export default function LeadDetail() {
                           {task.title}
                         </p>
                         <p className="mt-0.5 text-xs text-slate-400">
-                          Due {task.due_date ? new Date(task.due_date).toLocaleDateString() : "no due date"}
+                          Due {task.due_date ? formatIndiaDate(task.due_date, { day: "2-digit", month: "short", year: "numeric" }) : "no due date"}
                         </p>
                       </div>
                     </div>
@@ -909,9 +924,9 @@ export default function LeadDetail() {
           ) : (
             <div className="divide-y divide-slate-100">
               {notes.map((note) => (
-                <div key={note.id} className="px-5 py-3.5 transition hover:bg-slate-50/70">
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-800">{note.note}</p>
-                  <span className="mt-1.5 block text-[11px] text-slate-400">{formatDate(note.created_at)}</span>
+                <div key={note.id} className="space-y-2.5 px-5 py-4 transition hover:bg-slate-50/70">
+                  <NoteContent text={note.note} />
+                  <span className="block text-[11px] text-slate-400">{formatDate(note.created_at)}</span>
                 </div>
               ))}
             </div>

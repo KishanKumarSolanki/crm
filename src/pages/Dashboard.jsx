@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import Icon from "../components/Icon"
+import { formatIndiaDateTime, indiaDateInputValue } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -94,13 +95,46 @@ const toneFor = (seed = "") => {
 
 const formatDateTime = (value) => {
   if (!value) return ""
-  return new Date(value).toLocaleString([], {
+  return formatIndiaDateTime(value, {
     day: "2-digit",
     month: "short",
     hour: "2-digit",
     minute: "2-digit",
   })
 }
+
+const parseAppointmentTime = (message) => {
+  const match = String(message || "").match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
+  if (!match) return null
+  const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText] = match
+  const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(monthText.toLowerCase())
+  if (month < 0) return null
+  const day = Number(dayText)
+  const year = Number(yearText)
+  const hour12 = Number(hourText)
+  const minute = Number(minuteText)
+  if (day < 1 || day > 31 || hour12 < 1 || hour12 > 12 || minute > 59) return null
+  const zone = zoneText.trim()
+  let offsetMinutes
+  if (/\bIST\b|India Standard Time/i.test(zone)) {
+    offsetMinutes = 330
+  } else {
+    const offsetMatch = zone.match(/(?:UTC|GMT)\s*([+-])(\d{1,2})(?::?(\d{2}))?/i)
+    if (!offsetMatch) return null
+    offsetMinutes = (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0)) * (offsetMatch[1] === "+" ? 1 : -1)
+  }
+  const hour = hour12 % 12 + (meridiem.toUpperCase() === "PM" ? 12 : 0)
+  const localDate = new Date(Date.UTC(year, month, day, hour, minute))
+  if (localDate.getUTCFullYear() !== year || localDate.getUTCMonth() !== month || localDate.getUTCDate() !== day) return null
+  return new Date(localDate.getTime() - offsetMinutes * 60_000).toISOString()
+}
+
+const formatAppointmentTime = (value) => formatIndiaDateTime(value, {
+  day: "2-digit",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+})
 
 const isOverdue = (value) => Boolean(value) && new Date(value).getTime() < Date.now()
 
@@ -111,10 +145,9 @@ const matchesPeriod = (dateStr, period) => {
 
   const date = new Date(dateStr)
   const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-
-  const startOfWeek = new Date(startOfToday)
-  startOfWeek.setDate(startOfToday.getDate() - ((startOfToday.getDay() + 6) % 7))
+  const startOfToday = new Date(`${indiaDateInputValue(now)}T00:00:00+05:30`)
+  const indiaCalendarToday = new Date(`${indiaDateInputValue(now)}T00:00:00Z`)
+  const startOfWeek = new Date(startOfToday.getTime() - ((indiaCalendarToday.getUTCDay() + 6) % 7) * DAY_MS)
 
   switch (period) {
     case "today":
@@ -124,8 +157,7 @@ const matchesPeriod = (dateStr, period) => {
     case "this_week":
       return date >= startOfWeek
     case "last_week": {
-      const lastWeekStart = new Date(startOfWeek)
-      lastWeekStart.setDate(lastWeekStart.getDate() - 7)
+      const lastWeekStart = new Date(startOfWeek.getTime() - 7 * DAY_MS)
       return date >= lastWeekStart && date < startOfWeek
     }
     default:
@@ -282,6 +314,7 @@ export default function Dashboard() {
   const [leads, setLeads] = useState([])
   const [tasks, setTasks] = useState([])
   const [activities, setActivities] = useState([])
+  const [appointmentNotes, setAppointmentNotes] = useState([])
   const [loading, setLoading] = useState(true)
   const [activityPeriod, setActivityPeriod] = useState("all")
   const [activityKind, setActivityKind] = useState("all")
@@ -292,20 +325,23 @@ export default function Dashboard() {
     const fetchDashboardData = async () => {
       setLoading(true)
 
-      const [leadsResult, tasksResult, activitiesResult] = await Promise.all([
+      const [leadsResult, tasksResult, activitiesResult, notesResult] = await Promise.all([
         supabase.from("clients").select("*").order("created_at", { ascending: false }),
         supabase.from("tasks").select("*").order("due_date", { ascending: true }),
         supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(100),
+        supabase.from("notes").select("client_id,note,created_at").ilike("note", "%Appointment Requested:%").order("created_at", { ascending: false }),
       ])
 
       if (leadsResult.error) console.error("Leads:", leadsResult.error)
       if (tasksResult.error) console.error("Tasks:", tasksResult.error)
       if (activitiesResult.error) console.error("Activities:", activitiesResult.error)
+      if (notesResult.error) console.error("Appointment notes:", notesResult.error)
 
       if (!active) return
       setLeads(leadsResult.data || [])
       setTasks(tasksResult.data || [])
       setActivities(activitiesResult.data || [])
+      setAppointmentNotes(notesResult.data || [])
       setLoading(false)
     }
 
@@ -345,17 +381,26 @@ export default function Dashboard() {
     return counts
   }, [leads])
 
-  const followUpQueue = useMemo(
-    () =>
-      leads
-        .filter((lead) => lead.stage === "follow_up" || lead.next_follow_up)
-        .sort((a, b) => {
-          const dateA = a.next_follow_up ? new Date(a.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
-          const dateB = b.next_follow_up ? new Date(b.next_follow_up).getTime() : Number.MAX_SAFE_INTEGER
-          return dateA - dateB
-        }),
-    [leads]
-  )
+  const followUpQueue = useMemo(() => {
+    const appointmentsByLead = new Map()
+    appointmentNotes.forEach((note) => {
+      const appointmentAt = parseAppointmentTime(note.note)
+      const key = String(note.client_id)
+      if (appointmentAt && !appointmentsByLead.has(key)) appointmentsByLead.set(key, appointmentAt)
+    })
+
+    return leads
+      .map((lead) => ({
+        ...lead,
+        dashboardFollowUpAt: lead.next_follow_up || appointmentsByLead.get(String(lead.id)) || null,
+      }))
+      .filter((lead) => lead.stage === "follow_up" || lead.dashboardFollowUpAt)
+      .sort((a, b) => {
+        const dateA = a.dashboardFollowUpAt ? new Date(a.dashboardFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+        const dateB = b.dashboardFollowUpAt ? new Date(b.dashboardFollowUpAt).getTime() : Number.MAX_SAFE_INTEGER
+        return dateA - dateB
+      })
+  }, [leads, appointmentNotes])
 
   // Activities inside the selected date range, tagged with their counter type
   const periodActivities = useMemo(
@@ -522,14 +567,14 @@ export default function Dashboard() {
           ) : (
             <div className="-mx-2 flex flex-col">
               {followUpQueue.slice(0, 6).map((lead) => {
-                const overdue = isOverdue(lead.next_follow_up)
-                const dueLabel = lead.next_follow_up ? formatDateTime(lead.next_follow_up) : "Follow-up needed"
+                const overdue = isOverdue(lead.dashboardFollowUpAt)
+                const dueLabel = lead.dashboardFollowUpAt ? formatAppointmentTime(lead.dashboardFollowUpAt) : "Follow-up needed"
 
                 return (
                   <Link
                     key={lead.id}
                     to={`/lead/${lead.id}`}
-                    className="group flex items-center gap-4 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50"
+                    className="group flex flex-wrap items-center gap-3 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50 sm:gap-4"
                   >
                     <Avatar name={lead.name} seed={lead.id} size="sm" />
 
@@ -541,13 +586,13 @@ export default function Dashboard() {
                     </div>
 
                     <span
-                      className={`hidden shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 sm:inline-flex ${
+                      className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
                         overdue
                           ? "bg-red-50 text-red-600 ring-red-100"
                           : "bg-indigo-50 text-indigo-700 ring-indigo-100"
                       }`}
                     >
-                      {overdue ? "Overdue · " : ""}
+                      {overdue ? "Overdue · " : lead.dashboardFollowUpAt ? "Scheduled · " : ""}
                       {dueLabel}
                     </span>
 

@@ -3,6 +3,111 @@ import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 const boundedText = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
+const parseAppointmentTime = (message: string) => {
+  const match = message.match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i);
+  if (!match) return null;
+
+  const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText] = match;
+  const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+    .indexOf(monthText.toLowerCase());
+  if (month < 0) return null;
+
+  const day = Number(dayText);
+  const year = Number(yearText);
+  const hour12 = Number(hourText);
+  const minute = Number(minuteText);
+  if (day < 1 || day > 31 || hour12 < 1 || hour12 > 12 || minute > 59) return null;
+
+  const zone = zoneText.trim();
+  let offsetMinutes: number;
+  if (/\bIST\b|India Standard Time/i.test(zone)) {
+    offsetMinutes = 330;
+  } else {
+    const offsetMatch = zone.match(/(?:UTC|GMT)\s*([+-])(\d{1,2})(?::?(\d{2}))?/i);
+    if (!offsetMatch) return null;
+    offsetMinutes = (Number(offsetMatch[2]) * 60 + Number(offsetMatch[3] || 0)) * (offsetMatch[1] === "+" ? 1 : -1);
+  }
+
+  const hour = hour12 % 12 + (meridiem.toUpperCase() === "PM" ? 12 : 0);
+  const localDate = new Date(Date.UTC(year, month, day, hour, minute));
+  if (localDate.getUTCFullYear() !== year || localDate.getUTCMonth() !== month || localDate.getUTCDate() !== day) return null;
+  return new Date(localDate.getTime() - offsetMinutes * 60_000).toISOString();
+};
+const formatAppointmentForWhatsApp = (appointmentAt: string) => {
+  const appointment = new Date(appointmentAt);
+  return {
+    date: new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    }).format(appointment),
+    time: `${new Intl.DateTimeFormat("en-IN", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    }).format(appointment)} IST`,
+  };
+};
+const sendAppointmentConfirmation = async (args: {
+  name: string;
+  phone: string;
+  appointmentAt: string;
+}) => {
+  const apiKey = Deno.env.get("CHATVERSE_API_KEY");
+  const templateName = Deno.env.get("CHATVERSE_TEMPLATE_NAME");
+  if (!apiKey || !templateName) {
+    console.warn("WhatsApp appointment message skipped: ChatVerse API secrets are not configured.");
+    return false;
+  }
+
+  let recipient = args.phone.replace(/\D/g, "");
+  if (recipient.length === 10) {
+    const countryCode = (Deno.env.get("CHATVERSE_DEFAULT_COUNTRY_CODE") || "91").replace(/\D/g, "");
+    recipient = `${countryCode}${recipient}`;
+  }
+  if (recipient.length < 10 || recipient.length > 15) {
+    console.warn("WhatsApp appointment message skipped: lead phone number is not a valid international number.");
+    return false;
+  }
+
+  const { date, time } = formatAppointmentForWhatsApp(args.appointmentAt);
+  try {
+    const response = await fetch(
+      `https://api.chatverse.io/v1/whatsapp/templates/${encodeURIComponent(templateName)}/send`,
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          to: recipient,
+          body: [args.name, date, time],
+        }),
+      },
+    );
+    const responseText = await response.text();
+    let result: Record<string, unknown> = {};
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      // Preserve the HTTP status as the useful signal for non-JSON responses.
+    }
+    if (!response.ok || result.success === false) {
+      console.error("WhatsApp appointment message was rejected by ChatVerse.", {
+        status: response.status,
+        error: typeof result.error === "string" ? result.error : undefined,
+      });
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("WhatsApp appointment message request failed.", error instanceof Error ? error.message : "Unknown error");
+    return false;
+  }
+};
 const sha256 = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -57,20 +162,22 @@ Deno.serve(async (request) => {
   }
   if (externalLeadId) {
     const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id, service_name")
+      .select("id, form_completed_at, whatsapp_opt_in")
       .eq("external_lead_id", externalLeadId)
       .maybeSingle();
     if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
     // Stage 1 creates the CRM record. On final submission, update that same row
     // rather than creating a duplicate lead. Repeated completed submissions are idempotent.
-    if (existingLead && formStage === "complete" && existingLead.service_name) {
+    if (existingLead && formStage === "complete" && existingLead.form_completed_at) {
       return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     }
   }
   const attribution = (body.attribution && typeof body.attribution === "object")
     ? body.attribution as Record<string, unknown>
     : {};
+  const appointmentAt = parseAppointmentTime(boundedText(body.message, 2000));
   const consent = body.marketing_consent === true;
+  const whatsappOptIn = typeof body.whatsapp_opt_in === "boolean" ? body.whatsapp_opt_in : null;
   const submittedAt = Number(body.submitted_at || 0);
   if (submittedAt && Date.now() - submittedAt < 1800) return jsonResponse({ error: "Please try submitting the form again." }, 400, headers);
 
@@ -91,34 +198,42 @@ Deno.serve(async (request) => {
     fbp: consent ? boundedText(attribution.fbp, 500) || null : null,
     landing_page_url: boundedText(body.landing_page_url, 1000) || null,
     marketing_consent: consent,
-    stage: "discovery",
+    ...(whatsappOptIn !== null ? { whatsapp_opt_in: whatsappOptIn } : {}),
+    ...(appointmentAt ? { next_follow_up: appointmentAt } : {}),
   };
 
-  let lead: { id: string } | null = null;
+  let lead: { id: string; whatsapp_opt_in?: boolean; next_follow_up?: string | null } | null = null;
   let leadError: { code?: string; message: string } | null = null;
   let isNewLead = true;
   if (externalLeadId) {
     const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id, service_name")
+      .select("id, form_completed_at, whatsapp_opt_in")
       .eq("external_lead_id", externalLeadId)
       .maybeSingle();
     if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
-    if (existingLead && formStage === "complete" && existingLead.service_name) {
+    if (existingLead && formStage === "complete" && existingLead.form_completed_at) {
       return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     }
     if (existingLead) {
       isNewLead = false;
-      const { data, error } = await db.from("clients").update(leadFields)
-        .eq("id", existingLead.id).select("id").single();
+      const updateFields = Object.fromEntries(
+        Object.entries(leadFields).filter(([key, value]) => value !== null || key === "marketing_consent"),
+      );
+      let updateQuery = db.from("clients").update(updateFields).eq("id", existingLead.id);
+      if (formStage === "complete") updateQuery = updateQuery.is("form_completed_at", null);
+      const { data, error } = await updateQuery.select("id, whatsapp_opt_in, next_follow_up").maybeSingle();
+      if (!error && !data && formStage === "complete") {
+        return jsonResponse({ ok: true, duplicate: true }, 200, headers);
+      }
       lead = data;
       leadError = error;
     } else {
-      const { data, error } = await db.from("clients").insert(leadFields).select("id").single();
+      const { data, error } = await db.from("clients").insert({ ...leadFields, stage: "discovery" }).select("id, whatsapp_opt_in, next_follow_up").single();
       lead = data;
       leadError = error;
     }
   } else {
-    const { data, error } = await db.from("clients").insert(leadFields).select("id").single();
+    const { data, error } = await db.from("clients").insert({ ...leadFields, stage: "discovery" }).select("id, whatsapp_opt_in, next_follow_up").single();
     lead = data;
     leadError = error;
   }
@@ -154,8 +269,37 @@ Deno.serve(async (request) => {
     }),
   ]);
   if (taskResult.error) console.error("Lead follow-up task insert failed", taskResult.error.message);
-  if (noteResult.error) console.error("Lead message insert failed", noteResult.error.message);
+  if (noteResult.error) {
+    console.error("Lead message insert failed", noteResult.error.message);
+    if (formStage === "complete") return jsonResponse({ error: "Your enquiry was saved, but the completed form details could not be saved. Please submit again." }, 500, headers);
+  }
   if (activityResult.error) console.error("Lead activity insert failed", activityResult.error.message);
+
+  let completedFormNow = false;
+  if (formStage === "complete") {
+    const { data: completedLead, error: completionError } = await db.from("clients")
+      .update({ form_completed_at: new Date().toISOString() })
+      .eq("id", lead.id)
+      .is("form_completed_at", null)
+      .select("id")
+      .maybeSingle();
+    if (completionError) {
+      console.error("Completed form marker failed", completionError.message);
+      return jsonResponse({ error: "Your form details were saved, but completion could not be confirmed. Please try again." }, 500, headers);
+    }
+    if (!completedLead) return jsonResponse({ ok: true, duplicate: true }, 200, headers);
+    completedFormNow = true;
+  }
+
+  let whatsappMessageSent = false;
+  const appointmentForLead = appointmentAt || lead.next_follow_up || null;
+  if (completedFormNow && appointmentForLead && lead.whatsapp_opt_in === true && phone) {
+    whatsappMessageSent = await sendAppointmentConfirmation({
+      name,
+      phone,
+      appointmentAt: appointmentForLead,
+    });
+  }
 
   let eventId: string | null = null;
   if (consent) {
@@ -179,5 +323,5 @@ Deno.serve(async (request) => {
     }
   }
 
-  return jsonResponse({ ok: true, event_id: eventId }, 201, headers);
+  return jsonResponse({ ok: true, event_id: eventId, whatsapp_message_sent: whatsappMessageSent }, 201, headers);
 });

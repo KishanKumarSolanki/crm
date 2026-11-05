@@ -50,7 +50,7 @@ Deno.serve(async (request) => {
         const phone = typeof message.from === "string" ? message.from : "";
         if (!phone) continue;
         const { error } = await db.rpc("revoke_whatsapp_opt_in", { p_phone: phone });
-        if (error) return new Response("Could not update WhatsApp consent", { status: 500 });
+        if (error) return new Response("Could not record WhatsApp opt-out", { status: 500 });
       }
       const statuses = Array.isArray(value?.statuses) ? value.statuses as Array<Record<string, unknown>> : [];
       for (const statusEvent of statuses) {

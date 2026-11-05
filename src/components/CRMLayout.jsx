@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Sidebar from "./Sidebar";
 import Icon from "./Icon";
+import { formatIndiaDateTime } from "../lib/time";
 
 function CRMLayout() {
   const location = useLocation();
@@ -287,7 +288,7 @@ function CRMLayout() {
                     <Link key={task.id} to={task.client_id ? `/lead/${task.client_id}` : "/tasks"} onClick={() => { setNotificationsOpen(false); setMobileMenu(false); }} className="block rounded-lg px-2 py-2 no-underline hover:bg-gray-50">
                       <span className="block truncate text-sm font-medium text-gray-800">{task.title || "Untitled Task"}</span>
                       <span className={`text-xs ${task.overdue ? "text-red-600" : "text-amber-600"}`}>
-                        {new Date(task.due_date).toLocaleString()}
+                        {formatIndiaDateTime(task.due_date)}
                       </span>
                     </Link>
                   ))}

@@ -2,13 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
+import { formatIndiaDate, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time";
 
 const dateInputValue = (value) => {
   if (!value) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  return indiaDateInputValue(value);
 };
 
 export default function Tasks() {
@@ -102,7 +101,7 @@ export default function Tasks() {
     const values = {
       title: title.trim(),
       client_id: leadId,
-      due_date: dueDate ? new Date(`${dueDate}T23:59:59`).toISOString() : null,
+      due_date: dueDate ? indiaDateTimeInputToISOString(`${dueDate}T23:59`) : null,
       priority,
       instructions: instructions.trim() || null,
     };
@@ -202,9 +201,8 @@ export default function Tasks() {
 
   const formatDate = (value) => {
     if (!value) return "No due date";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Invalid date";
-    return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+    const formatted = formatIndiaDate(value, { day: "2-digit", month: "short", year: "numeric" });
+    return formatted || "Invalid date";
   };
 
   const inputClass =
@@ -322,6 +320,7 @@ export default function Tasks() {
           <label className="text-xs font-semibold text-slate-600">
             Due date
             <input className={`${inputClass} mt-1.5`} type="date" value={dueDate} onChange={(event) => setDueDate(event.target.value)} />
+            <span className="mt-1 block text-[10px] font-normal text-slate-400">End of day · India Standard Time (GMT+5:30)</span>
           </label>
           <label className="text-xs font-semibold text-slate-600">
             Priority

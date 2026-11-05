@@ -82,8 +82,8 @@ async function sendEmail(db: ReturnType<typeof createClient>, job: Job) {
   const token = encodeURIComponent(job.unsubscribe_token);
   const unsubscribeUrl = `${siteUrl}/unsubscribe?token=${token}`;
   const rawHtml = interpolateHtml(job.body_html || `<p>${escapeHtml(job.body_text || "")}</p>`, job);
-  const html = `${sanitizeHtml(rawHtml)}<hr style="border:0;border-top:1px solid #e2e8f0;margin:28px 0 14px"><p style="font:12px/1.5 Arial,sans-serif;color:#64748b">You received this email because you opted in to updates. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
-  const text = `${interpolate(job.body_text || "", job)}\n\nYou received this email because you opted in to updates. Unsubscribe: ${unsubscribeUrl}`;
+  const html = `${sanitizeHtml(rawHtml)}<hr style="border:0;border-top:1px solid #e2e8f0;margin:28px 0 14px"><p style="font:12px/1.5 Arial,sans-serif;color:#64748b">You received this email from Creative Crew. <a href="${unsubscribeUrl}">Unsubscribe</a></p>`;
+  const text = `${interpolate(job.body_text || "", job)}\n\nYou received this email from Creative Crew. Unsubscribe: ${unsubscribeUrl}`;
   if (new TextEncoder().encode(html).byteLength + new TextEncoder().encode(text).byteLength > 45_000) {
     throw new ProviderError("Email content exceeds EmailJS's 50 KB template-variable limit.", false);
   }
@@ -245,20 +245,20 @@ Deno.serve(async (request) => {
   for (const job of (jobs || []) as Job[]) {
     campaignIds.add(job.campaign_id);
     const { data: client } = await db.from("clients")
-      .select("name, company, email, phone, email_marketing_opt_in, email_unsubscribed_at, whatsapp_opt_in")
+      .select("name, company, email, phone, email_unsubscribed_at, whatsapp_unsubscribed_at")
       .eq("id", job.client_id).maybeSingle();
     if (!client) {
       await db.from("broadcast_recipients").update({ status: "skipped", error_message: "Client record no longer exists.", status_updated_at: new Date().toISOString() }).eq("id", job.id);
       skipped += 1;
       continue;
     }
-    if (job.channel === "email" && (!client.email_marketing_opt_in || client.email_unsubscribed_at || !client.email)) {
-      await db.from("broadcast_recipients").update({ status: "skipped", error_message: "Email consent was withdrawn or the address is missing.", status_updated_at: new Date().toISOString() }).eq("id", job.id);
+    if (job.channel === "email" && (client.email_unsubscribed_at || !client.email)) {
+      await db.from("broadcast_recipients").update({ status: "skipped", error_message: "Email address is missing or the contact has unsubscribed.", status_updated_at: new Date().toISOString() }).eq("id", job.id);
       skipped += 1;
       continue;
     }
-    if (job.channel === "whatsapp" && (!client.whatsapp_opt_in || !client.phone)) {
-      await db.from("broadcast_recipients").update({ status: "skipped", error_message: "WhatsApp opt-in was withdrawn or the phone number is missing.", status_updated_at: new Date().toISOString() }).eq("id", job.id);
+    if (job.channel === "whatsapp" && (client.whatsapp_unsubscribed_at || !client.phone)) {
+      await db.from("broadcast_recipients").update({ status: "skipped", error_message: "WhatsApp number is missing or the contact has opted out.", status_updated_at: new Date().toISOString() }).eq("id", job.id);
       skipped += 1;
       continue;
     }

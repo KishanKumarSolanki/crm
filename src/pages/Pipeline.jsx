@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { sendWelcomeEmailWhenContacted } from "../lib/email";
+import { formatIndiaDateTime } from "../lib/time";
 import {
   DragDropContext,
   Droppable,
@@ -10,6 +11,18 @@ import {
 
 const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "active", "in_revision", "delivered"];
 const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" };
+const leadCategories = [
+  { id: "igs", label: "Institute Growth System", aliases: ["igs", "institute growth system"] },
+  { id: "dm", label: "Digital Marketing", aliases: ["dm", "digital marketing"] },
+  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
+  { id: "lms", label: "LMS", aliases: ["lms"] },
+  { id: "ncf", label: "NCF", aliases: ["ncf"] },
+];
+
+const categoryForLead = (lead) => {
+  const source = lead.lead_source?.trim().toLowerCase();
+  return leadCategories.find((category) => category.aliases.includes(source))?.id || null;
+};
 
 const stageStyles = {
   discovery: {
@@ -39,6 +52,12 @@ export default function Pipeline() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+
+  const categoryCounts = Object.fromEntries([
+    ["all", leads.length],
+    ...leadCategories.map((category) => [category.id, leads.filter((lead) => categoryForLead(lead) === category.id).length]),
+  ]);
 
   const fetchLeads = async () => {
     setLoading(true);
@@ -139,7 +158,7 @@ export default function Pipeline() {
       {/* Page Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-indigo-600">
             CRM Management
           </p>
@@ -151,9 +170,37 @@ export default function Pipeline() {
           <p className="mt-2 text-sm text-slate-500">
             Manage deals from first enquiry through delivery.
           </p>
+
+          <div role="tablist" aria-label="Pipeline lead categories" className="mt-4 flex w-full gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-100">
+            {[
+              { id: "all", label: "All" },
+              ...leadCategories,
+            ].map((category) => {
+              const selected = selectedCategory === category.id;
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  onClick={() => setSelectedCategory(category.id)}
+                  className={`relative inline-flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-sm font-semibold transition ${
+                    selected ? "text-indigo-700" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {category.label}
+                  <span className={`rounded-md px-1.5 py-0.5 text-[11px] font-bold ${selected ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500"}`}>
+                    {categoryCounts[category.id]}
+                  </span>
+                  {selected && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 self-start rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 self-start sm:self-auto">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
             <svg
               viewBox="0 0 24 24"
@@ -175,6 +222,7 @@ export default function Pipeline() {
             <p className="text-xl font-bold text-slate-900">
               {leads.length}
             </p>
+          </div>
           </div>
         </div>
       </div>
@@ -204,8 +252,8 @@ export default function Pipeline() {
           <div className="grid grid-cols-1 items-start gap-5 sm:grid-cols-2 2xl:grid-cols-4">
 
             {stages.map((stage) => {
-              const stageLeads = leads.filter(
-                (lead) => lead.stage === stage
+              const stageLeads = leads.filter((lead) =>
+                lead.stage === stage && (selectedCategory === "all" || categoryForLead(lead) === selectedCategory)
               );
 
               const style = stageStyles[stage];
@@ -283,7 +331,7 @@ export default function Pipeline() {
                                     </h3>
 
                                     {lead.service_name && <p className="mt-2 text-xs font-medium text-violet-700">{lead.service_name}</p>}
-                                    {lead.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {new Date(lead.next_follow_up).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</p>}
+                                    {lead.next_follow_up && <p className="mt-1 text-xs text-slate-500">Follow-up · {formatIndiaDateTime(lead.next_follow_up, { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</p>}
                                   </div>
 
                                   <span className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-500">

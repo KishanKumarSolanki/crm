@@ -3,6 +3,7 @@ import readXlsxFile from "read-excel-file/browser"
 import { supabase } from "../lib/supabase"
 import { Link } from "react-router-dom"
 import Icon from "../components/Icon"
+import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -58,6 +59,7 @@ const AVATAR_TONES = [
 const PAGE_SIZES = [10, 25, 50]
 const DAY_MS = 86400000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const LEAD_COLUMN_WIDTHS = [190, 190, 175, 145, 145, 145, 230, 205]
 
 // =========================
 // HELPERS
@@ -78,7 +80,7 @@ const formatStage = (stage) => {
 
 const formatShortDateTime = (value) =>
   value
-    ? new Date(value).toLocaleString("en-IN", {
+    ? formatIndiaDateTime(value, {
         day: "2-digit",
         month: "short",
         hour: "2-digit",
@@ -274,7 +276,7 @@ export default function Leads() {
 
     try {
       const initialFollowUp = nextFollowUp
-        ? new Date(nextFollowUp).toISOString()
+        ? indiaDateTimeInputToISOString(nextFollowUp)
         : new Date(Date.now() + DAY_MS).toISOString()
 
       const { data, error } = await supabase
@@ -663,9 +665,9 @@ export default function Leads() {
         lead.service_name,
         lead.lead_source,
         formatStage(lead.stage),
-        conversation?.created_at ? new Date(conversation.created_at).toLocaleString() : "",
+        conversation?.created_at ? formatIndiaDateTime(conversation.created_at) : "",
         conversation?.description,
-        lead.next_follow_up ? new Date(lead.next_follow_up).toLocaleString() : "",
+        lead.next_follow_up ? formatIndiaDateTime(lead.next_follow_up) : "",
         taskStatusByLead.get(String(lead.id)) || "",
       ]
     })
@@ -674,7 +676,7 @@ export default function Leads() {
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }))
     const link = document.createElement("a")
     link.href = url
-    link.download = `crm-leads-${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `crm-leads-${indiaDateInputValue()}.csv`
     link.click()
     URL.revokeObjectURL(url)
   }
@@ -904,6 +906,7 @@ export default function Leads() {
               onChange={(e) => setNextFollowUp(e.target.value)}
               className={inputClass}
             />
+            <p className="mt-1 text-[10px] text-slate-400">India Standard Time (GMT+5:30)</p>
           </div>
 
           <div className="flex items-end">
@@ -1100,14 +1103,15 @@ export default function Leads() {
         </div>
 
         {/* Table */}
-        <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[900px] border-collapse">
+        <div className="w-full overflow-x-auto overscroll-x-contain">
+          <table className="w-full min-w-[1425px] table-fixed border-collapse">
             <thead>
               <tr className="bg-slate-50/70">
                 {["Lead", "Company", "Service", "Phone", "Next follow-up", "Stage", "Email", ""].map((h, i) => (
                   <th
                     key={h + i}
-                    className="whitespace-nowrap border-b border-slate-100 px-5 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400"
+                    style={{ width: LEAD_COLUMN_WIDTHS[i] }}
+                    className="whitespace-nowrap border-b border-slate-100 px-4 py-3 text-left text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400"
                   >
                     {h}
                   </th>
@@ -1140,7 +1144,7 @@ export default function Leads() {
 
                   return (
                     <tr key={lead.id} className="group transition-colors hover:bg-slate-50/70">
-                      <td className="border-b border-slate-100 px-5 py-3.5">
+                      <td className="border-b border-slate-100 px-4 py-3.5">
                         <Link
                           to={`/lead/${lead.id}`}
                           className="flex items-center gap-3 text-inherit no-underline"
@@ -1157,34 +1161,35 @@ export default function Leads() {
                         </Link>
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5 text-[13px] text-slate-600">
-                        <span className="whitespace-nowrap">{lead.company || <span className="text-slate-300">—</span>}</span>
+                      <td className="border-b border-slate-100 px-4 py-3.5 text-[13px] text-slate-600">
+                        <span className="break-words" title={lead.company || ""}>{lead.company || <span className="text-slate-300">—</span>}</span>
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5 text-[13px] text-slate-600">
-                        {lead.service_name || <span className="text-slate-300">—</span>}
+                      <td className="border-b border-slate-100 px-4 py-3.5 text-[13px] text-slate-600">
+                        <span className="break-words" title={lead.service_name || ""}>{lead.service_name || <span className="text-slate-300">—</span>}</span>
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5 text-[13px] text-slate-600">
+                      <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3.5 text-[13px] text-slate-600">
                         {lead.phone || <span className="text-slate-300">—</span>}
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5 text-[13px] text-slate-600">
+                      <td className="whitespace-nowrap border-b border-slate-100 px-4 py-3.5 text-[13px] text-slate-600">
                         {formatShortDateTime(lead.next_follow_up)}
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5">
+                      <td className="border-b border-slate-100 px-4 py-3.5">
                         <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${style.badge}`}>
                           <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
                           {formatStage(lead.stage)}
                         </span>
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5">
+                      <td className="border-b border-slate-100 px-4 py-3.5">
                         {lead.email ? (
                           <a
                             href={`mailto:${lead.email}`}
-                            className="text-[13px] text-slate-500 no-underline transition hover:text-indigo-600 hover:underline"
+                            title={lead.email}
+                            className="break-all text-[13px] text-slate-500 no-underline transition hover:text-indigo-600 hover:underline"
                           >
                             {lead.email}
                           </a>
@@ -1193,7 +1198,7 @@ export default function Leads() {
                         )}
                       </td>
 
-                      <td className="border-b border-slate-100 px-5 py-3.5">
+                      <td className="border-b border-slate-100 px-3 py-3.5">
                         <div className="flex items-center justify-end gap-1.5 opacity-90 transition group-hover:opacity-100">
                           <Link
                             to={`/lead/${lead.id}`}
