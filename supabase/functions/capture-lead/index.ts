@@ -3,6 +3,7 @@ import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 const boundedText = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
+
 const parseAppointmentTime = (message: string) => {
   const match = message.match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i);
   if (!match) return null;
@@ -33,6 +34,7 @@ const parseAppointmentTime = (message: string) => {
   if (localDate.getUTCFullYear() !== year || localDate.getUTCMonth() !== month || localDate.getUTCDate() !== day) return null;
   return new Date(localDate.getTime() - offsetMinutes * 60_000).toISOString();
 };
+
 const formatAppointmentForWhatsApp = (appointmentAt: string) => {
   const appointment = new Date(appointmentAt);
   return {
@@ -50,6 +52,7 @@ const formatAppointmentForWhatsApp = (appointmentAt: string) => {
     }).format(appointment)} IST`,
   };
 };
+
 const sendAppointmentConfirmation = async (args: {
   name: string;
   phone: string;
@@ -108,6 +111,7 @@ const sendAppointmentConfirmation = async (args: {
     return false;
   }
 };
+
 const sha256 = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -127,18 +131,22 @@ Deno.serve(async (request) => {
   }
 
   if (boundedText(body.website, 200)) return jsonResponse({ ok: true }, 200, headers);
+
   const name = boundedText(body.name, 120);
   const email = boundedText(body.email, 254).toLowerCase();
   const phone = boundedText(body.phone, 40);
   const externalLeadId = boundedText(body.external_lead_id, 120) || null;
   const formStage = boundedText(body.form_stage, 20) === "step1" ? "step1" : "complete";
+
   if (!name || (!email && !phone)) return jsonResponse({ error: "Name and either email or phone are required." }, 400, headers);
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonResponse({ error: "Enter a valid email address." }, 400, headers);
 
   const siteUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!siteUrl || !serviceKey) return jsonResponse({ error: "Lead capture is not configured." }, 503, headers);
+
   const db = createClient(siteUrl, serviceKey, { auth: { persistSession: false } });
+
   const forwardedIp = request.headers.get("cf-connecting-ip")
     || request.headers.get("x-real-ip")
     || request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
@@ -160,24 +168,13 @@ Deno.serve(async (request) => {
     }
     if (!allowed) return jsonResponse({ error: "Too many enquiries from this connection. Please try again in a few minutes." }, 429, { ...headers, "Retry-After": "600" });
   }
-  if (externalLeadId) {
-    const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id, form_completed_at, whatsapp_opt_in")
-      .eq("external_lead_id", externalLeadId)
-      .maybeSingle();
-    if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
-    // Stage 1 creates the CRM record. On final submission, update that same row
-    // rather than creating a duplicate lead. Repeated completed submissions are idempotent.
-    if (existingLead && formStage === "complete" && existingLead.form_completed_at) {
-      return jsonResponse({ ok: true, duplicate: true }, 200, headers);
-    }
-  }
+
   const attribution = (body.attribution && typeof body.attribution === "object")
     ? body.attribution as Record<string, unknown>
     : {};
   const appointmentAt = parseAppointmentTime(boundedText(body.message, 2000));
   const consent = body.marketing_consent === true;
-  const whatsappOptIn = typeof body.whatsapp_opt_in === "boolean" ? body.whatsapp_opt_in : null;
+
   const submittedAt = Number(body.submitted_at || 0);
   if (submittedAt && Date.now() - submittedAt < 1800) return jsonResponse({ error: "Please try submitting the form again." }, 400, headers);
 
@@ -198,22 +195,25 @@ Deno.serve(async (request) => {
     fbp: consent ? boundedText(attribution.fbp, 500) || null : null,
     landing_page_url: boundedText(body.landing_page_url, 1000) || null,
     marketing_consent: consent,
-    ...(whatsappOptIn !== null ? { whatsapp_opt_in: whatsappOptIn } : {}),
     ...(appointmentAt ? { next_follow_up: appointmentAt } : {}),
   };
 
-  let lead: { id: string; whatsapp_opt_in?: boolean; next_follow_up?: string | null } | null = null;
+  let lead: { id: string; next_follow_up?: string | null } | null = null;
   let leadError: { code?: string; message: string } | null = null;
   let isNewLead = true;
+
   if (externalLeadId) {
     const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id, form_completed_at, whatsapp_opt_in")
+      .select("id, form_completed_at")
       .eq("external_lead_id", externalLeadId)
       .maybeSingle();
     if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
+    // Stage 1 creates the CRM record. On final submission, update that same row
+    // rather than creating a duplicate lead. Repeated completed submissions are idempotent.
     if (existingLead && formStage === "complete" && existingLead.form_completed_at) {
       return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     }
+
     if (existingLead) {
       isNewLead = false;
       const updateFields = Object.fromEntries(
@@ -221,19 +221,25 @@ Deno.serve(async (request) => {
       );
       let updateQuery = db.from("clients").update(updateFields).eq("id", existingLead.id);
       if (formStage === "complete") updateQuery = updateQuery.is("form_completed_at", null);
-      const { data, error } = await updateQuery.select("id, whatsapp_opt_in, next_follow_up").maybeSingle();
+      const { data, error } = await updateQuery.select("id, next_follow_up").maybeSingle();
       if (!error && !data && formStage === "complete") {
         return jsonResponse({ ok: true, duplicate: true }, 200, headers);
       }
       lead = data;
       leadError = error;
     } else {
-      const { data, error } = await db.from("clients").insert({ ...leadFields, stage: "discovery" }).select("id, whatsapp_opt_in, next_follow_up").single();
+      const { data, error } = await db.from("clients")
+        .insert({ ...leadFields, stage: "discovery" })
+        .select("id, next_follow_up")
+        .single();
       lead = data;
       leadError = error;
     }
   } else {
-    const { data, error } = await db.from("clients").insert({ ...leadFields, stage: "discovery" }).select("id, whatsapp_opt_in, next_follow_up").single();
+    const { data, error } = await db.from("clients")
+      .insert({ ...leadFields, stage: "discovery" })
+      .select("id, next_follow_up")
+      .single();
     lead = data;
     leadError = error;
   }
@@ -293,7 +299,7 @@ Deno.serve(async (request) => {
 
   let whatsappMessageSent = false;
   const appointmentForLead = appointmentAt || lead.next_follow_up || null;
-  if (completedFormNow && appointmentForLead && lead.whatsapp_opt_in === true && phone) {
+  if (completedFormNow && appointmentForLead && phone) {
     whatsappMessageSent = await sendAppointmentConfirmation({
       name,
       phone,

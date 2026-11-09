@@ -1,8 +1,7 @@
 -- Admin-only campaign, recipient, consent, and delivery records.
 alter table public.clients
   add column if not exists email_marketing_opt_in boolean not null default false,
-  add column if not exists email_unsubscribed_at timestamptz,
-  add column if not exists whatsapp_opt_in boolean not null default false;
+  add column if not exists email_unsubscribed_at timestamptz;
 
 create table if not exists public.broadcast_campaigns (
   id uuid primary key default gen_random_uuid(),
@@ -180,34 +179,6 @@ $$;
 
 revoke all on function public.claim_broadcast_recipients(integer) from public, anon, authenticated;
 grant execute on function public.claim_broadcast_recipients(integer) to service_role;
-
--- Honor common WhatsApp opt-out replies from a verified provider webhook.
-create or replace function public.revoke_whatsapp_opt_in(p_phone text)
-returns integer
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  normalized_phone text;
-  changed_rows integer;
-begin
-  normalized_phone := regexp_replace(coalesce(p_phone, ''), '[^0-9]', '', 'g');
-  if length(normalized_phone) < 8 or length(normalized_phone) > 15 then
-    return 0;
-  end if;
-
-  update public.clients
-  set whatsapp_opt_in = false
-  where whatsapp_opt_in is true
-    and regexp_replace(coalesce(phone, ''), '[^0-9]', '', 'g') = normalized_phone;
-  get diagnostics changed_rows = row_count;
-  return changed_rows;
-end;
-$$;
-
-revoke all on function public.revoke_whatsapp_opt_in(text) from public, anon, authenticated;
-grant execute on function public.revoke_whatsapp_opt_in(text) to service_role;
 
 -- Private attachments can only be uploaded by admins and downloaded by the service worker.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
