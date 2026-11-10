@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import Icon from "../components/Icon"
-import { formatIndiaDateTime, indiaDateInputValue } from "../lib/time"
+import { formatIndiaDateTime, indiaDateInputValue, parseDateTime } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -136,14 +136,18 @@ const formatAppointmentTime = (value) => formatIndiaDateTime(value, {
   minute: "2-digit",
 })
 
-const isOverdue = (value) => Boolean(value) && new Date(value).getTime() < Date.now()
+const isOverdue = (value) => {
+  const d = parseDateTime(value)
+  return Boolean(d) && d.getTime() < Date.now()
+}
 
 const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0)
 
 const matchesPeriod = (dateStr, period) => {
   if (period === "all") return true
 
-  const date = new Date(dateStr)
+  const date = parseDateTime(dateStr)
+  if (!date) return false
   const now = new Date()
   const startOfToday = new Date(`${indiaDateInputValue(now)}T00:00:00+05:30`)
   const indiaCalendarToday = new Date(`${indiaDateInputValue(now)}T00:00:00Z`)

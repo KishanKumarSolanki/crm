@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Sidebar from "./Sidebar";
 import Icon from "./Icon";
-import { formatIndiaDateTime } from "../lib/time";
+import { formatIndiaDateTime, parseDateTime } from "../lib/time";
 
 function CRMLayout() {
   const location = useLocation();
@@ -121,11 +121,14 @@ function CRMLayout() {
     } else {
       const horizon = Date.now() + 24 * 60 * 60 * 1000;
       setNotifications((data || [])
-        .filter((task) => new Date(task.due_date).getTime() <= horizon)
-        .map((task) => ({
-          ...task,
-          overdue: new Date(task.due_date).getTime() < Date.now(),
-        })));
+        .filter((task) => (parseDateTime(task.due_date)?.getTime() ?? Infinity) <= horizon)
+        .map((task) => {
+          const taskDue = parseDateTime(task.due_date);
+          return {
+            ...task,
+            overdue: taskDue ? taskDue.getTime() < Date.now() : false,
+          };
+        }));
     }
     setNotificationsLoading(false);
   };

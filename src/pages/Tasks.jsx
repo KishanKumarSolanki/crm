@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
-import { formatIndiaDate, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time";
+import { formatIndiaDate, indiaDateInputValue, indiaDateTimeInputToISOString, parseDateTime } from "../lib/time";
 
 const dateInputValue = (value) => {
   if (!value) return "";
@@ -391,7 +391,8 @@ export default function Tasks() {
             {visibleTasks.map((task) => {
               const linkedLead = leadById.get(String(task.client_id));
               const completed = task.status?.toLowerCase() === "completed";
-              const overdue = !completed && task.due_date && new Date(task.due_date) < new Date();
+              const taskDueDate = parseDateTime(task.due_date);
+              const overdue = !completed && taskDueDate && taskDueDate.getTime() < Date.now();
               return (
                 <article key={task.id} className="flex flex-col gap-3 px-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
                   <div className="min-w-0">

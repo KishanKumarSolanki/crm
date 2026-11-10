@@ -5,7 +5,7 @@ import { Link } from "react-router-dom"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import Icon from "../components/Icon"
-import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time"
+import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString, parseDateTime } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -101,6 +101,32 @@ const LEAD_CATEGORIES = [
 const categoryForLead = (lead) => {
   const source = lead.lead_source?.trim().toLowerCase()
   return LEAD_CATEGORIES.find((category) => category.aliases.includes(source))?.id || null
+}
+
+const leadDateBounds = (period) => {
+  if (period === "all") return null
+
+  const startOfToday = new Date(`${indiaDateInputValue()}T00:00:00+05:30`)
+  if (period === "yesterday") {
+    return { start: startOfToday.getTime() - DAY_MS, end: startOfToday.getTime() }
+  }
+
+  const indiaCalendarToday = new Date(`${indiaDateInputValue()}T00:00:00Z`)
+  const startOfWeek = new Date(startOfToday.getTime() - ((indiaCalendarToday.getUTCDay() + 6) % 7) * DAY_MS)
+  if (period === "last_week") {
+    return { start: startOfWeek.getTime() - 7 * DAY_MS, end: startOfWeek.getTime() }
+  }
+  if (period === "this_week") {
+    return { start: startOfWeek.getTime(), end: startOfToday.getTime() + DAY_MS }
+  }
+  return { start: startOfToday.getTime(), end: startOfToday.getTime() + DAY_MS }
+}
+
+const isLeadInDateBounds = (lead, bounds) => {
+  if (!bounds) return true
+  const date = parseDateTime(lead.created_at)
+  const createdAt = date ? date.getTime() : NaN
+  return Number.isFinite(createdAt) && createdAt >= bounds.start && createdAt < bounds.end
 }
 
 const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
@@ -209,6 +235,7 @@ export default function Leads() {
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
   const [leadCategory, setLeadCategory] = useState("all")
+  const [dateFilter, setDateFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
 
@@ -724,27 +751,33 @@ export default function Leads() {
   // DERIVED DATA
   // =========================
 
+  const dateBounds = useMemo(() => leadDateBounds(dateFilter), [dateFilter])
+
   const categoryCounts = useMemo(
     () => Object.fromEntries([
-      ["all", leads.length],
-      ...LEAD_CATEGORIES.map((category) => [category.id, leads.filter((lead) => categoryForLead(lead) === category.id).length]),
+      ["all", leads.filter((lead) => isLeadInDateBounds(lead, dateBounds)).length],
+      ...LEAD_CATEGORIES.map((category) => [
+        category.id,
+        leads.filter((lead) => categoryForLead(lead) === category.id && isLeadInDateBounds(lead, dateBounds)).length,
+      ]),
     ]),
-    [leads]
+    [leads, dateBounds]
   )
 
   const filteredLeads = useMemo(() => {
     const query = search.toLowerCase().trim()
     return leads.filter((lead) => {
       const matchesCategory = leadCategory === "all" || categoryForLead(lead) === leadCategory
+      const matchesDate = isLeadInDateBounds(lead, dateBounds)
       const matchesSearch =
         !query ||
         lead.name?.toLowerCase().includes(query) ||
         lead.email?.toLowerCase().includes(query) ||
         lead.company?.toLowerCase().includes(query)
       const matchesStage = stageFilter === "all" || lead.stage === stageFilter
-      return matchesCategory && matchesSearch && matchesStage
+      return matchesCategory && matchesDate && matchesSearch && matchesStage
     })
-  }, [leads, leadCategory, search, stageFilter])
+  }, [leads, leadCategory, dateBounds, search, stageFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -1122,10 +1155,27 @@ export default function Leads() {
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Showing {visibleLeads.length} of {filteredLeads.length} matching lead{filteredLeads.length !== 1 ? "s" : ""}
+              {dateFilter !== "all" && ` · ${dateFilter === "this_week" ? "This week" : dateFilter === "last_week" ? "Last week" : dateFilter === "yesterday" ? "Yesterday" : "Today"}`}
             </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <select
+              aria-label="Filter leads by date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value)
+                setPage(1)
+              }}
+              className="h-10 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:w-auto"
+            >
+              <option value="all">All dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This week</option>
+              <option value="last_week">Last week</option>
+            </select>
+
             <div className="flex h-10 w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 transition focus-within:border-indigo-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/10 sm:w-56">
               <Icon name="search" size={15} className="text-slate-400" />
               <input
