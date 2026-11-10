@@ -324,7 +324,7 @@ export default function Leads() {
         if (recipientPhone.length === 10) {
           recipientPhone = `91${recipientPhone}`
         }
-        fetch("https://api.chatverse.io/whatsapp/crm-triggers/hook/kwzlRoiI8DXSDQNZQx12tDNGYpKXrq3T", {
+        fetch("https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

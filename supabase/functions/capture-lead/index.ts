@@ -113,7 +113,7 @@ const sendAppointmentConfirmation = async (args: {
 };
 
 const CHATVERSE_CRM_WEBHOOK_URL = Deno.env.get("CHATVERSE_CRM_WEBHOOK_URL") ||
-  "https://api.chatverse.io/whatsapp/crm-triggers/hook/kwzlRoiI8DXSDQNZQx12tDNGYpKXrq3T";
+  "https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T";
 
 const sendLeadToChatVerseTrigger = async (args: {
   name: string;
