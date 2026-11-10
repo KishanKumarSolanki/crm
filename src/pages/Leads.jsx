@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import readXlsxFile from "read-excel-file/browser"
 import { supabase } from "../lib/supabase"
 import { Link } from "react-router-dom"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 import Icon from "../components/Icon"
 import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time"
 
@@ -200,6 +202,8 @@ export default function Leads() {
   const [showAddLead, setShowAddLead] = useState(false)
   const [showImportCategory, setShowImportCategory] = useState(false)
   const [importCategory, setImportCategory] = useState("")
+  const [leadToDelete, setLeadToDelete] = useState(null)
+  const [deletingLead, setDeletingLead] = useState(false)
   const importFileRef = useRef(null)
 
   const [search, setSearch] = useState("")
@@ -207,6 +211,17 @@ export default function Leads() {
   const [leadCategory, setLeadCategory] = useState("all")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+
+  useEffect(() => {
+    if (!leadToDelete || deletingLead) return
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setLeadToDelete(null)
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [leadToDelete, deletingLead])
 
   // =========================
   // FETCH
@@ -592,12 +607,12 @@ export default function Leads() {
     }
   }
 
-  const handleDeleteLead = async (lead) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${lead.name}"? This will also delete this lead's notes, tasks, and activity history.`
-    )
-    if (!confirmed) return
+  const handleDeleteLead = (lead) => setLeadToDelete(lead)
 
+  const confirmDeleteLead = async () => {
+    if (!leadToDelete || deletingLead) return
+    const lead = leadToDelete
+    setDeletingLead(true)
     try {
       for (const table of ["notes", "tasks", "activities"]) {
         const { error } = await supabase.from(table).delete().eq("client_id", lead.id)
@@ -609,10 +624,17 @@ export default function Leads() {
 
       setLeads((current) => current.filter((item) => item.id !== lead.id))
       setPage(1)
-      alert("Lead deleted successfully.")
+      setLeadToDelete(null)
+      toast("Lead deleted successfully.", {
+        style: { background: "#dc2626", color: "#fff" },
+      })
     } catch (error) {
       console.error("Delete lead error:", error)
-      alert(`Could not delete lead: ${error.message || "Unknown error"}`)
+      toast.error(`Could not delete lead: ${error.message || "Unknown error"}`, {
+        style: { background: "#dc2626", color: "#fff" },
+      })
+    } finally {
+      setDeletingLead(false)
     }
   }
 
@@ -765,6 +787,49 @@ export default function Leads() {
 
   return (
     <div className="w-full space-y-5 text-slate-900">
+      <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+      {leadToDelete && (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deletingLead) setLeadToDelete(null)
+          }}
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-lead-title"
+            aria-describedby="delete-lead-description"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h2 id="delete-lead-title" className="text-lg font-bold text-slate-900">
+              Delete lead?
+            </h2>
+            <p id="delete-lead-description" className="mt-2 text-sm leading-6 text-slate-600">
+              Are you sure you want to delete <strong>{leadToDelete.name}</strong>? This will also delete this lead&apos;s notes, tasks, and activity history.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setLeadToDelete(null)}
+                disabled={deletingLead}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteLead()}
+                disabled={deletingLead}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingLead ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {/* HEADER */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between p-5 border border-slate-200/80 rounded-2xl">
         <div>
