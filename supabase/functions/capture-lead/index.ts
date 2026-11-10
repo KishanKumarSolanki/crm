@@ -112,6 +112,46 @@ const sendAppointmentConfirmation = async (args: {
   }
 };
 
+const CHATVERSE_CRM_WEBHOOK_URL = Deno.env.get("CHATVERSE_CRM_WEBHOOK_URL") ||
+  "https://api.chatverse.io/whatsapp/crm-triggers/hook/kwzlRoiI8DXSDQNZQx12tDNGYpKXrq3T";
+
+const sendLeadToChatVerseTrigger = async (args: {
+  name: string;
+  phone: string;
+  email?: string | null;
+}) => {
+  if (!args.phone) return false;
+  let recipient = args.phone.replace(/\D/g, "");
+  if (recipient.length === 10) {
+    const countryCode = (Deno.env.get("CHATVERSE_DEFAULT_COUNTRY_CODE") || "91").replace(/\D/g, "");
+    recipient = `${countryCode}${recipient}`;
+  }
+  if (recipient.length < 10 || recipient.length > 15) {
+    console.warn("ChatVerse CRM trigger skipped: lead phone is not a valid international number.");
+    return false;
+  }
+
+  try {
+    const response = await fetch(CHATVERSE_CRM_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: args.name,
+        phone: recipient,
+        email: args.email || "",
+      }),
+    });
+    if (!response.ok) {
+      console.warn("ChatVerse CRM trigger webhook returned status:", response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("ChatVerse CRM trigger webhook failed:", error instanceof Error ? error.message : "Unknown error");
+    return false;
+  }
+};
+
 const sha256 = async (value: string) => {
   const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -305,6 +345,18 @@ Deno.serve(async (request) => {
       phone,
       appointmentAt: appointmentForLead,
     });
+  }
+
+  // Trigger ChatVerse WhatsApp CRM flow for new leads and form submissions
+  if ((isNewLead || completedFormNow) && phone) {
+    const triggerSent = await sendLeadToChatVerseTrigger({
+      name,
+      phone,
+      email,
+    });
+    if (triggerSent) {
+      whatsappMessageSent = true;
+    }
   }
 
   let eventId: string | null = null;

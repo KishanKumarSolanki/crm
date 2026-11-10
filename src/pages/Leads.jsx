@@ -318,6 +318,23 @@ export default function Leads() {
       ])
       if (activityError) console.error("Activity error:", activityError)
 
+      // ChatVerse CRM Trigger: naye lead par automated WhatsApp flow trigger karna
+      if (newLead.phone) {
+        let recipientPhone = String(newLead.phone).replace(/\D/g, "")
+        if (recipientPhone.length === 10) {
+          recipientPhone = `91${recipientPhone}`
+        }
+        fetch("https://api.chatverse.io/whatsapp/crm-triggers/hook/kwzlRoiI8DXSDQNZQx12tDNGYpKXrq3T", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newLead.name,
+            phone: recipientPhone,
+            email: newLead.email || "",
+          }),
+        }).catch((err) => console.error("ChatVerse trigger error:", err))
+      }
+
       resetForm()
       await fetchLeads()
       setPage(1)
