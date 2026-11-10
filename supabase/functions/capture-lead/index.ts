@@ -59,8 +59,7 @@ const sendAppointmentConfirmation = async (args: {
   appointmentAt: string;
 }) => {
   const apiKey = Deno.env.get("CHATVERSE_API_KEY");
-  const templateName = Deno.env.get("CHATVERSE_TEMPLATE_NAME");
-  if (!apiKey || !templateName) {
+  if (!apiKey) {
     console.warn("WhatsApp appointment message skipped: ChatVerse API secrets are not configured.");
     return false;
   }
@@ -78,7 +77,7 @@ const sendAppointmentConfirmation = async (args: {
   const { date, time } = formatAppointmentForWhatsApp(args.appointmentAt);
   try {
     const response = await fetch(
-      `https://api.chatverse.io/v1/whatsapp/templates/${encodeURIComponent(templateName)}/send`,
+      "https://api.chatverse.io/v1/whatsapp/templates/new_lead_received/send",
       {
         method: "POST",
         headers: {
@@ -87,6 +86,7 @@ const sendAppointmentConfirmation = async (args: {
         },
         body: JSON.stringify({
           to: recipient,
+          language: "en_US",
           body: [args.name, date, time],
         }),
       },
@@ -336,14 +336,12 @@ Deno.serve(async (request) => {
     if (!completedLead) return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     completedFormNow = true;
   }
-
   let whatsappMessageSent = false;
-  const appointmentForLead = appointmentAt || lead.next_follow_up || null;
-  if (completedFormNow && appointmentForLead && phone) {
+  if (completedFormNow && appointmentAt && phone) {
     whatsappMessageSent = await sendAppointmentConfirmation({
       name,
       phone,
-      appointmentAt: appointmentForLead,
+      appointmentAt,
     });
   }
 
