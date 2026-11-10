@@ -54,7 +54,7 @@ function Sidebar({ mobileOpen = false, onNavigate = () => { }, onLogout = () => 
         <img
           src="/logo.png"
           alt="Creative Crew logo"
-          className="h-10 w-10 shrink-0 rounded-xl bg-gray-400 object-contain p-1.5 shadow-lg shadow-indigo-500/20"
+          className="h-15 w-15 shrink-0 rounded-xl object-contain"
         />
         <div className={textBlockClass}>
           <h2 className="text-[17px] font-bold leading-tight tracking-tight text-slate-900">Creative Crew</h2>
