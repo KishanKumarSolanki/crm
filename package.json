@@ -19,6 +19,7 @@
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.89.0",
     "react-router-dom": "^7.18.4",
+    "react-toastify": "^11.2.0",
     "read-excel-file": "^9.3.12",
     "zod": "^4.6.5"
   },

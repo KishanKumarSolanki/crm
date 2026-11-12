@@ -2,8 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import readXlsxFile from "read-excel-file/browser"
 import { supabase } from "../lib/supabase"
 import { Link } from "react-router-dom"
+import { ToastContainer, toast } from "react-toastify"
+import "react-toastify/dist/ReactToastify.css"
 import Icon from "../components/Icon"
-import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString } from "../lib/time"
+import { formatIndiaDateTime, indiaDateInputValue, indiaDateTimeInputToISOString, parseDateTime } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -99,6 +101,32 @@ const LEAD_CATEGORIES = [
 const categoryForLead = (lead) => {
   const source = lead.lead_source?.trim().toLowerCase()
   return LEAD_CATEGORIES.find((category) => category.aliases.includes(source))?.id || null
+}
+
+const leadDateBounds = (period) => {
+  if (period === "all") return null
+
+  const startOfToday = new Date(`${indiaDateInputValue()}T00:00:00+05:30`)
+  if (period === "yesterday") {
+    return { start: startOfToday.getTime() - DAY_MS, end: startOfToday.getTime() }
+  }
+
+  const indiaCalendarToday = new Date(`${indiaDateInputValue()}T00:00:00Z`)
+  const startOfWeek = new Date(startOfToday.getTime() - ((indiaCalendarToday.getUTCDay() + 6) % 7) * DAY_MS)
+  if (period === "last_week") {
+    return { start: startOfWeek.getTime() - 7 * DAY_MS, end: startOfWeek.getTime() }
+  }
+  if (period === "this_week") {
+    return { start: startOfWeek.getTime(), end: startOfToday.getTime() + DAY_MS }
+  }
+  return { start: startOfToday.getTime(), end: startOfToday.getTime() + DAY_MS }
+}
+
+const isLeadInDateBounds = (lead, bounds) => {
+  if (!bounds) return true
+  const date = parseDateTime(lead.created_at)
+  const createdAt = date ? date.getTime() : NaN
+  return Number.isFinite(createdAt) && createdAt >= bounds.start && createdAt < bounds.end
 }
 
 const csvCell = (value) => `"${String(value ?? "").replaceAll('"', '""')}"`
@@ -200,13 +228,27 @@ export default function Leads() {
   const [showAddLead, setShowAddLead] = useState(false)
   const [showImportCategory, setShowImportCategory] = useState(false)
   const [importCategory, setImportCategory] = useState("")
+  const [leadToDelete, setLeadToDelete] = useState(null)
+  const [deletingLead, setDeletingLead] = useState(false)
   const importFileRef = useRef(null)
 
   const [search, setSearch] = useState("")
   const [stageFilter, setStageFilter] = useState("all")
   const [leadCategory, setLeadCategory] = useState("all")
+  const [dateFilter, setDateFilter] = useState("all")
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
+
+  useEffect(() => {
+    if (!leadToDelete || deletingLead) return
+
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setLeadToDelete(null)
+    }
+
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [leadToDelete, deletingLead])
 
   // =========================
   // FETCH
@@ -317,6 +359,23 @@ export default function Leads() {
         },
       ])
       if (activityError) console.error("Activity error:", activityError)
+
+      // ChatVerse CRM Trigger: naye lead par automated WhatsApp flow trigger karna
+      if (newLead.phone) {
+        let recipientPhone = String(newLead.phone).replace(/\D/g, "")
+        if (recipientPhone.length === 10) {
+          recipientPhone = `91${recipientPhone}`
+        }
+        fetch("https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newLead.name,
+            phone: recipientPhone,
+            email: newLead.email || "",
+          }),
+        }).catch((err) => console.error("ChatVerse trigger error:", err))
+      }
 
       resetForm()
       await fetchLeads()
@@ -575,12 +634,12 @@ export default function Leads() {
     }
   }
 
-  const handleDeleteLead = async (lead) => {
-    const confirmed = window.confirm(
-      `Are you sure you want to delete "${lead.name}"? This will also delete this lead's notes, tasks, and activity history.`
-    )
-    if (!confirmed) return
+  const handleDeleteLead = (lead) => setLeadToDelete(lead)
 
+  const confirmDeleteLead = async () => {
+    if (!leadToDelete || deletingLead) return
+    const lead = leadToDelete
+    setDeletingLead(true)
     try {
       for (const table of ["notes", "tasks", "activities"]) {
         const { error } = await supabase.from(table).delete().eq("client_id", lead.id)
@@ -592,10 +651,17 @@ export default function Leads() {
 
       setLeads((current) => current.filter((item) => item.id !== lead.id))
       setPage(1)
-      alert("Lead deleted successfully.")
+      setLeadToDelete(null)
+      toast("Lead deleted successfully.", {
+        style: { background: "#dc2626", color: "#fff" },
+      })
     } catch (error) {
       console.error("Delete lead error:", error)
-      alert(`Could not delete lead: ${error.message || "Unknown error"}`)
+      toast.error(`Could not delete lead: ${error.message || "Unknown error"}`, {
+        style: { background: "#dc2626", color: "#fff" },
+      })
+    } finally {
+      setDeletingLead(false)
     }
   }
 
@@ -685,27 +751,33 @@ export default function Leads() {
   // DERIVED DATA
   // =========================
 
+  const dateBounds = useMemo(() => leadDateBounds(dateFilter), [dateFilter])
+
   const categoryCounts = useMemo(
     () => Object.fromEntries([
-      ["all", leads.length],
-      ...LEAD_CATEGORIES.map((category) => [category.id, leads.filter((lead) => categoryForLead(lead) === category.id).length]),
+      ["all", leads.filter((lead) => isLeadInDateBounds(lead, dateBounds)).length],
+      ...LEAD_CATEGORIES.map((category) => [
+        category.id,
+        leads.filter((lead) => categoryForLead(lead) === category.id && isLeadInDateBounds(lead, dateBounds)).length,
+      ]),
     ]),
-    [leads]
+    [leads, dateBounds]
   )
 
   const filteredLeads = useMemo(() => {
     const query = search.toLowerCase().trim()
     return leads.filter((lead) => {
       const matchesCategory = leadCategory === "all" || categoryForLead(lead) === leadCategory
+      const matchesDate = isLeadInDateBounds(lead, dateBounds)
       const matchesSearch =
         !query ||
         lead.name?.toLowerCase().includes(query) ||
         lead.email?.toLowerCase().includes(query) ||
         lead.company?.toLowerCase().includes(query)
       const matchesStage = stageFilter === "all" || lead.stage === stageFilter
-      return matchesCategory && matchesSearch && matchesStage
+      return matchesCategory && matchesDate && matchesSearch && matchesStage
     })
-  }, [leads, leadCategory, search, stageFilter])
+  }, [leads, leadCategory, dateBounds, search, stageFilter])
 
   const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -748,6 +820,49 @@ export default function Leads() {
 
   return (
     <div className="w-full space-y-5 text-slate-900">
+      <ToastContainer position="top-right" autoClose={3000} newestOnTop />
+      {leadToDelete && (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-slate-950/50 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !deletingLead) setLeadToDelete(null)
+          }}
+        >
+          <section
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-lead-title"
+            aria-describedby="delete-lead-description"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"
+          >
+            <h2 id="delete-lead-title" className="text-lg font-bold text-slate-900">
+              Delete lead?
+            </h2>
+            <p id="delete-lead-description" className="mt-2 text-sm leading-6 text-slate-600">
+              Are you sure you want to delete <strong>{leadToDelete.name}</strong>? This will also delete this lead&apos;s notes, tasks, and activity history.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setLeadToDelete(null)}
+                disabled={deletingLead}
+                className="inline-flex h-10 items-center justify-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmDeleteLead()}
+                disabled={deletingLead}
+                className="inline-flex h-10 items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {deletingLead ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
       {/* HEADER */}
       <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between p-5 border border-slate-200/80 rounded-2xl">
         <div>
@@ -1040,10 +1155,27 @@ export default function Leads() {
             </h2>
             <p className="mt-0.5 text-xs text-slate-500">
               Showing {visibleLeads.length} of {filteredLeads.length} matching lead{filteredLeads.length !== 1 ? "s" : ""}
+              {dateFilter !== "all" && ` · ${dateFilter === "this_week" ? "This week" : dateFilter === "last_week" ? "Last week" : dateFilter === "yesterday" ? "Yesterday" : "Today"}`}
             </p>
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+            <select
+              aria-label="Filter leads by date"
+              value={dateFilter}
+              onChange={(e) => {
+                setDateFilter(e.target.value)
+                setPage(1)
+              }}
+              className="h-10 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:w-auto"
+            >
+              <option value="all">All dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This week</option>
+              <option value="last_week">Last week</option>
+            </select>
+
             <div className="flex h-10 w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 transition focus-within:border-indigo-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/10 sm:w-56">
               <Icon name="search" size={15} className="text-slate-400" />
               <input

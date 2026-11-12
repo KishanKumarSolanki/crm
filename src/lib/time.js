@@ -1,23 +1,35 @@
 export const INDIA_TIME_ZONE = "Asia/Kolkata"
 export const INDIA_TIME_ZONE_LABEL = "India Standard Time (GMT+5:30)"
 
+export const parseDateTime = (value) => {
+  if (!value) return null
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value
+  let str = String(value).trim()
+  if (!str) return null
+  // If the string is a database timestamp without timezone (e.g. "2026-11-10T20:08:58" or "2026-11-10 20:08:58.712655"),
+  // treat it as UTC since PostgreSQL timestamps are recorded in UTC.
+  if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(str)) {
+    str = str.replace(" ", "T") + "Z"
+  }
+  const date = new Date(str)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 export const formatIndiaDateTime = (value, options = {}) => {
-  if (!value) return ""
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
+  const date = parseDateTime(value)
+  if (!date) return ""
   return `${date.toLocaleString("en-IN", { timeZone: INDIA_TIME_ZONE, ...options })} GMT+5:30`
 }
 
 export const formatIndiaDate = (value, options = {}) => {
-  if (!value) return ""
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
+  const date = parseDateTime(value)
+  if (!date) return ""
   return date.toLocaleDateString("en-IN", { timeZone: INDIA_TIME_ZONE, ...options })
 }
 
 export const indiaDateInputValue = (value = new Date()) => {
-  const date = value instanceof Date ? value : new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
+  const date = parseDateTime(value)
+  if (!date) return ""
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: INDIA_TIME_ZONE,
     year: "numeric",
@@ -29,9 +41,8 @@ export const indiaDateInputValue = (value = new Date()) => {
 }
 
 export const indiaDateTimeInputValue = (value) => {
-  if (!value) return ""
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ""
+  const date = parseDateTime(value)
+  if (!date) return ""
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: INDIA_TIME_ZONE,
     year: "numeric",

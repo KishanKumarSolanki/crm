@@ -44,12 +44,12 @@ const formatAppointmentForWhatsApp = (appointmentAt: string) => {
       month: "short",
       year: "numeric",
     }).format(appointment),
-    time: `${new Intl.DateTimeFormat("en-IN", {
+    time: new Intl.DateTimeFormat("en-IN", {
       timeZone: "Asia/Kolkata",
       hour: "2-digit",
       minute: "2-digit",
       hour12: true,
-    }).format(appointment)} IST`,
+    }).format(appointment),
   };
 };
 
@@ -59,8 +59,7 @@ const sendAppointmentConfirmation = async (args: {
   appointmentAt: string;
 }) => {
   const apiKey = Deno.env.get("CHATVERSE_API_KEY");
-  const templateName = Deno.env.get("CHATVERSE_TEMPLATE_NAME");
-  if (!apiKey || !templateName) {
+  if (!apiKey) {
     console.warn("WhatsApp appointment message skipped: ChatVerse API secrets are not configured.");
     return false;
   }
@@ -78,7 +77,7 @@ const sendAppointmentConfirmation = async (args: {
   const { date, time } = formatAppointmentForWhatsApp(args.appointmentAt);
   try {
     const response = await fetch(
-      `https://api.chatverse.io/v1/whatsapp/templates/${encodeURIComponent(templateName)}/send`,
+      "https://api.chatverse.io/v1/whatsapp/templates/new_lead_received/send",
       {
         method: "POST",
         headers: {
@@ -87,6 +86,7 @@ const sendAppointmentConfirmation = async (args: {
         },
         body: JSON.stringify({
           to: recipient,
+          language: "en_US",
           body: [args.name, date, time],
         }),
       },
@@ -108,6 +108,46 @@ const sendAppointmentConfirmation = async (args: {
     return true;
   } catch (error) {
     console.error("WhatsApp appointment message request failed.", error instanceof Error ? error.message : "Unknown error");
+    return false;
+  }
+};
+
+const CHATVERSE_CRM_WEBHOOK_URL = Deno.env.get("CHATVERSE_CRM_WEBHOOK_URL") ||
+  "https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T";
+
+const sendLeadToChatVerseTrigger = async (args: {
+  name: string;
+  phone: string;
+  email?: string | null;
+}) => {
+  if (!args.phone) return false;
+  let recipient = args.phone.replace(/\D/g, "");
+  if (recipient.length === 10) {
+    const countryCode = (Deno.env.get("CHATVERSE_DEFAULT_COUNTRY_CODE") || "91").replace(/\D/g, "");
+    recipient = `${countryCode}${recipient}`;
+  }
+  if (recipient.length < 10 || recipient.length > 15) {
+    console.warn("ChatVerse CRM trigger skipped: lead phone is not a valid international number.");
+    return false;
+  }
+
+  try {
+    const response = await fetch(CHATVERSE_CRM_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: args.name,
+        phone: recipient,
+        email: args.email || "",
+      }),
+    });
+    if (!response.ok) {
+      console.warn("ChatVerse CRM trigger webhook returned status:", response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error("ChatVerse CRM trigger webhook failed:", error instanceof Error ? error.message : "Unknown error");
     return false;
   }
 };
@@ -296,15 +336,25 @@ Deno.serve(async (request) => {
     if (!completedLead) return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     completedFormNow = true;
   }
-
   let whatsappMessageSent = false;
-  const appointmentForLead = appointmentAt || lead.next_follow_up || null;
-  if (completedFormNow && appointmentForLead && phone) {
+  if (completedFormNow && appointmentAt && phone) {
     whatsappMessageSent = await sendAppointmentConfirmation({
       name,
       phone,
-      appointmentAt: appointmentForLead,
+      appointmentAt,
     });
+  }
+
+  // Trigger ChatVerse WhatsApp CRM flow for new leads and form submissions
+  if ((isNewLead || completedFormNow) && phone) {
+    const triggerSent = await sendLeadToChatVerseTrigger({
+      name,
+      phone,
+      email,
+    });
+    if (triggerSent) {
+      whatsappMessageSent = true;
+    }
   }
 
   let eventId: string | null = null;
