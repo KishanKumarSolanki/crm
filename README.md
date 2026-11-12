@@ -72,6 +72,8 @@ Before using the panel:
 | `WHATSAPP_ACCESS_TOKEN` | WhatsApp | Meta access token with WhatsApp messaging permission |
 | `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp | Registered Cloud API phone number ID |
 | `WHATSAPP_GRAPH_API_VERSION` | WhatsApp | Graph API version enabled for your Meta app, e.g. `vXX.0` |
+| `CHATVERSE_API_KEY` | Lead confirmation | ChatVerse API key used server-side for lead-confirmation messages |
+| `CHATVERSE_KEY` | WhatsApp panel | Separate ChatVerse embed API key used server-side to create a launch path; never expose it in frontend environment variables |
 | `WHATSAPP_APP_SECRET` | WhatsApp status callbacks | Meta app secret used to verify webhook signatures |
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | WhatsApp webhook setup | A long random token you choose for webhook verification |
 | `BROADCAST_CRON_SECRET` | Scheduled campaigns | Long random secret sent by the scheduler to the queue worker |
@@ -82,12 +84,15 @@ Supabase supplies `SUPABASE_URL` and the server-side key to deployed Edge Functi
 
 The worker spaces EmailJS requests at least 1.1 seconds apart across concurrent workers to respect its [documented one-request-per-second limit](https://www.emailjs.com/docs/rest-api/send/). It uses EmailJS's [multipart send endpoint](https://www.emailjs.com/docs/rest-api/send-form/) for campaign attachments. EmailJS acceptance is recorded as `sent`; this integration does not receive EmailJS delivery, bounce, open, or click callbacks, so email delivery analytics are not available in the panel. EmailJS does not provide an idempotency key here, so ambiguous timeout/server errors are not retried automatically; check the EmailJS dashboard history before retrying those messages. WhatsApp delivery/read statuses continue to come from Meta callbacks. The Campaign history tab has a **Process queue** action for queued work after the worker is deployed; the scheduled queue cron is still needed for automatic scheduling and retries.
 
+Set the separate `CHATVERSE_KEY` once in Supabase Dashboard → Edge Function Secrets. Keep `CHATVERSE_API_KEY` for lead-confirmation messages; the WhatsApp panel uses `CHATVERSE_KEY` to request a fresh launch path from the `chatverse-launch` Edge Function. Neither key is entered in the CRM or sent to the browser. Ensure `PUBLIC_SITE_URL` or `PUBLIC_SITE_URLS` includes the CRM's deployed origin for the Edge Function CORS allowlist.
+
 Deploy the worker and callback functions after setting secrets:
 
 ```sh
 supabase functions deploy process-broadcast-queue
 supabase functions deploy unsubscribe-broadcast
 supabase functions deploy whatsapp-broadcast-webhook
+supabase functions deploy chatverse-launch
 ```
 
 Configure provider callbacks:

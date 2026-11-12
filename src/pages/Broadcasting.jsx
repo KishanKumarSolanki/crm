@@ -24,6 +24,77 @@ const buttonClass = "inline-flex h-10 items-center justify-center gap-2 rounded-
 const ghostButtonClass = "inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
 const cardClass = "rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]"
 
+let chatVerseScriptPromise
+
+function loadChatVerseScript() {
+  if (typeof window.ChatVerse?.mount === "function") return Promise.resolve()
+  if (!chatVerseScriptPromise) {
+    chatVerseScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script")
+      script.src = "https://chatverse.io/embed.js"
+      script.async = true
+      script.onload = resolve
+      script.onerror = () => {
+        chatVerseScriptPromise = null
+        reject(new Error("Could not load the ChatVerse embed. Please try again."))
+      }
+      document.head.appendChild(script)
+    })
+  }
+  return chatVerseScriptPromise.then(() => {
+    if (typeof window.ChatVerse?.mount !== "function") {
+      chatVerseScriptPromise = null
+      throw new Error("The ChatVerse embed did not initialize correctly.")
+    }
+  })
+}
+
+function ChatVersePanel() {
+  const [error, setError] = useState("")
+
+  useEffect(() => {
+    let active = true
+    const mount = async () => {
+      try {
+        await loadChatVerseScript()
+        if (!active) return
+
+        window.ChatVerse.mount("#chatverse-whatsapp", {
+          getLaunchPath: async () => {
+            const { data, error: launchError } = await supabase.functions.invoke("chatverse-launch")
+            if (launchError) {
+              if (active) setError(launchError.message || "Could not create a ChatVerse launch path.")
+              throw launchError
+            }
+            if (typeof data?.launchPath !== "string" || !data.launchPath) {
+              const invalidPathError = new Error("ChatVerse did not return a launch path.")
+              if (active) setError(invalidPathError.message)
+              throw invalidPathError
+            }
+            return data.launchPath
+          },
+        })
+      } catch (mountError) {
+        if (active) setError(mountError.message || "Could not open the ChatVerse WhatsApp panel.")
+      }
+    }
+
+    mount()
+    return () => { active = false }
+  }, [])
+
+  return (
+    <div className="relative h-full min-h-[560px] w-full">
+      <div id="chatverse-whatsapp" className="h-full min-h-[560px] w-full" />
+      {error && (
+        <div role="alert" className="absolute inset-x-4 top-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm">
+          {error}
+        </div>
+      )}
+    </div>
+  )
+}
+
 async function loadAllRows(table, columns, orderColumn) {
   const rows = []
   const pageSize = 1000
@@ -489,12 +560,7 @@ function Broadcasting() {
   if (activeTab === "whatsapp") {
     return (
       <div className="-mx-3 -mt-4 -mb-[25px] h-[calc(100vh-68px)] min-h-[560px] min-[481px]:-mx-4 min-[481px]:-mt-5 min-[481px]:-mb-[30px] min-[769px]:-mx-[30px] min-[769px]:-mt-7 min-[769px]:-mb-10 min-[769px]:h-[calc(100vh-76px)]">
-        <iframe
-          src="https://chatverse.io/embed/whatsapp/p_geqQJMEd4_nanPFFeoc"
-          title="WhatsApp Studio"
-          className="h-full min-h-[560px] w-full border-0"
-          allow="clipboard-read; clipboard-write"
-        />
+        <ChatVersePanel />
       </div>
     )
   }
