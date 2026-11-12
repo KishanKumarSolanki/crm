@@ -8,6 +8,7 @@ const menuItems = [
   { name: "Leads", path: "/leads", icon: "leads", adminOnly: true, managerAccess: true },
   { name: "Pipeline", path: "/pipeline", icon: "pipeline", adminOnly: true, managerAccess: true },
   { name: "Appointments", path: "/appointments", icon: "calendar", adminOnly: true, managerAccess: true },
+  { name: "Follow-ups", path: "/follow-ups", icon: "clock", adminOnly: true, managerAccess: true },
   { name: "Broadcasting", path: "/broadcasting", icon: "broadcast", adminOnly: true },
   { name: "Tasks", path: "/tasks", icon: "tasks", adminOnly: true, managerAccess: true },
   { name: "Team Members", path: "/team-members", icon: "team", adminOnly: true },

@@ -58,7 +58,6 @@ const AVATAR_TONES = [
   "from-slate-600 to-slate-800",
 ]
 
-const PAGE_SIZES = [10, 25, 50]
 const DAY_MS = 86400000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const LEAD_COLUMN_WIDTHS = [190, 190, 175, 145, 145, 145, 230, 205]
@@ -236,8 +235,6 @@ export default function Leads() {
   const [stageFilter, setStageFilter] = useState("all")
   const [leadCategory, setLeadCategory] = useState("all")
   const [dateFilter, setDateFilter] = useState("all")
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(10)
 
   useEffect(() => {
     if (!leadToDelete || deletingLead) return
@@ -379,7 +376,6 @@ export default function Leads() {
 
       resetForm()
       await fetchLeads()
-      setPage(1)
       setShowAddLead(false)
       alert("Lead added. The welcome email will be sent when you move it to Contacted.")
     } catch (err) {
@@ -616,7 +612,6 @@ export default function Leads() {
       }
 
       await fetchLeads()
-      setPage(1)
 
       const summary = [
         `Category: ${importCategoryLabel}`,
@@ -650,7 +645,6 @@ export default function Leads() {
       if (error) throw error
 
       setLeads((current) => current.filter((item) => item.id !== lead.id))
-      setPage(1)
       setLeadToDelete(null)
       toast("Lead deleted successfully.", {
         style: { background: "#dc2626", color: "#fff" },
@@ -779,22 +773,26 @@ export default function Leads() {
     })
   }, [leads, leadCategory, dateBounds, search, stageFilter])
 
-  const totalPages = Math.max(1, Math.ceil(filteredLeads.length / pageSize))
-  const currentPage = Math.min(page, totalPages)
-  const visibleLeads = useMemo(
-    () => filteredLeads.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filteredLeads, currentPage, pageSize]
-  )
+  const visibleLeads = filteredLeads
 
   const stats = useMemo(() => {
-    const count = (fn) => leads.filter(fn).length
+    const periodLeads = leads.filter((lead) => isLeadInDateBounds(lead, dateBounds))
+    const count = (fn) => periodLeads.filter(fn).length
     return {
-      total: leads.length,
+      total: periodLeads.length,
       discovery: count((l) => l.stage === "discovery"),
       active: count((l) => l.stage === "active" || l.stage === "signed"),
       delivered: count((l) => l.stage === "delivered"),
     }
-  }, [leads])
+  }, [leads, dateBounds])
+
+  const dateFilterLabel = {
+    all: "All dates",
+    today: "Today",
+    yesterday: "Yesterday",
+    this_week: "This week",
+    last_week: "Last week",
+  }[dateFilter]
 
   const statCards = [
     { label: "Total Leads", value: stats.total, icon: "leads", chip: "bg-indigo-50 text-indigo-600 ring-indigo-100" },
@@ -802,9 +800,6 @@ export default function Leads() {
     { label: "Active", value: stats.active, icon: "pipeline", chip: "bg-emerald-50 text-emerald-600 ring-emerald-100" },
     { label: "Delivered", value: stats.delivered, icon: "tasks", chip: "bg-blue-50 text-blue-600 ring-blue-100" },
   ]
-
-  const rangeStart = filteredLeads.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
-  const rangeEnd = Math.min(currentPage * pageSize, filteredLeads.length)
 
   // =========================
   // LOADING
@@ -875,15 +870,29 @@ export default function Leads() {
           <p className="mt-1.5 text-sm text-slate-500">Manage your leads, pipeline and relationships.</p>
         </div>
 
-        <div className="flex flex-row items-center gap-2 self-start sm:flex-col sm:items-stretch sm:self-auto">
-          <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 shadow-sm">
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">Total</span>
+        <div className="grid grid-cols-2 items-center gap-2 self-start sm:self-auto">
+          <select
+            aria-label="Filter leads by date"
+            value={dateFilter}
+            onChange={(e) => {
+              setDateFilter(e.target.value)
+            }}
+            className="h-10 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
+          >
+            <option value="all">All dates</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This week</option>
+            <option value="last_week">Last week</option>
+          </select>
+          <div className="flex h-10 w-full items-center justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 shadow-sm">
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400">{dateFilter === "all" ? "Total" : dateFilterLabel}</span>
             <strong className="text-xl font-bold text-slate-900">{stats.total}</strong>
           </div>
           <button
             type="button"
             onClick={() => setShowAddLead(true)}
-            className={`${btnPrimary} w-auto sm:w-full`}
+            className={`${btnPrimary} col-span-2 w-full !text-white hover:!text-white`}
           >
             <Icon name="plus" size={15} />
             Add lead
@@ -1125,7 +1134,6 @@ export default function Leads() {
                 aria-selected={selected}
                 onClick={() => {
                   setLeadCategory(category.id)
-                  setPage(1)
                 }}
                 className={`relative inline-flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-sm font-semibold transition ${
                   selected ? "text-indigo-700" : "text-slate-500 hover:text-slate-800"
@@ -1160,22 +1168,6 @@ export default function Leads() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-            <select
-              aria-label="Filter leads by date"
-              value={dateFilter}
-              onChange={(e) => {
-                setDateFilter(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:w-auto"
-            >
-              <option value="all">All dates</option>
-              <option value="today">Today</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="this_week">This week</option>
-              <option value="last_week">Last week</option>
-            </select>
-
             <div className="flex h-10 w-full items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/70 px-3 transition focus-within:border-indigo-300 focus-within:bg-white focus-within:ring-4 focus-within:ring-indigo-500/10 sm:w-56">
               <Icon name="search" size={15} className="text-slate-400" />
               <input
@@ -1185,7 +1177,6 @@ export default function Leads() {
                 value={search}
                 onChange={(e) => {
                   setSearch(e.target.value)
-                  setPage(1)
                 }}
                 className="w-full bg-transparent text-sm text-slate-700 outline-none placeholder:text-slate-400"
               />
@@ -1197,7 +1188,6 @@ export default function Leads() {
                 value={stageFilter}
                 onChange={(e) => {
                   setStageFilter(e.target.value)
-                  setPage(1)
                 }}
                 className="h-10 min-w-0 flex-1 cursor-pointer rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:px-3 sm:text-sm"
               >
@@ -1369,53 +1359,6 @@ export default function Leads() {
           </table>
         </div>
 
-        {/* Pagination */}
-        {filteredLeads.length > 0 && (
-          <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              Rows per page
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value))
-                  setPage(1)
-                }}
-                className="h-8 cursor-pointer rounded-lg border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 outline-none focus:border-indigo-300"
-              >
-                {PAGE_SIZES.map((size) => (
-                  <option key={size} value={size}>{size}</option>
-                ))}
-              </select>
-            </label>
-
-            <div className="flex items-center justify-between gap-3 text-xs text-slate-500 sm:justify-end">
-              <span className="tabular-nums">
-                {rangeStart}–{rangeEnd} of {filteredLeads.length}
-              </span>
-              <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                  disabled={currentPage === 1}
-                  className={`${btnGhost} h-8 px-3`}
-                >
-                  Previous
-                </button>
-                <span className="px-2 font-medium text-slate-600 tabular-nums">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                  disabled={currentPage === totalPages}
-                  className={`${btnGhost} h-8 px-3`}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
       </section>
     </div>
   )

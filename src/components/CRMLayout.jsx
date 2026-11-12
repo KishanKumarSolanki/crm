@@ -147,6 +147,7 @@ function CRMLayout() {
     if (path === "/leads") return "Leads";
     if (path === "/pipeline") return "Pipeline";
     if (path === "/appointments") return "Appointments";
+    if (path === "/follow-ups") return "Follow-ups";
     if (path === "/broadcasting") return "Broadcasting";
     if (path === "/tasks") return "Tasks";
     if (path === "/team-members") return "Team Members";
