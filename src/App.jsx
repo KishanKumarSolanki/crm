@@ -9,7 +9,7 @@ const LeadDetail = lazy(() => import("./pages/LeadDetail"))
 const Pipeline = lazy(() => import("./pages/Pipeline"))
 const Tasks = lazy(() => import("./pages/Tasks"))
 const TeamMembers = lazy(() => import("./pages/TeamMembers"))
-const MarketingAnalytics = lazy(() => import("./pages/MarketingAnalytics"))
+const Appointments = lazy(() => import("./pages/Appointments"))
 const Broadcasting = lazy(() => import("./pages/Broadcasting"))
 const Unsubscribe = lazy(() => import("./pages/Unsubscribe"))
 
@@ -63,7 +63,8 @@ function App() {
 
           <Route path="/manager-dashboard" element={<RoleRoute allowedRoles={["manager"]}><ManagerDashboard /></RoleRoute>} />
 
-          <Route path="/marketing" element={<AdminRoute><MarketingAnalytics /></AdminRoute>} />
+          <Route path="/appointments" element={<RoleRoute allowedRoles={["admin", "manager"]}><Appointments /></RoleRoute>} />
+          <Route path="/marketing" element={<Navigate to="/appointments" replace />} />
           <Route path="/broadcasting" element={<AdminRoute><Broadcasting /></AdminRoute>} />
 
 
