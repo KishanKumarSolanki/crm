@@ -235,7 +235,7 @@ Deno.serve(async (request) => {
     fbp: consent ? boundedText(attribution.fbp, 500) || null : null,
     landing_page_url: boundedText(body.landing_page_url, 1000) || null,
     marketing_consent: consent,
-    ...(appointmentAt ? { next_follow_up: appointmentAt } : {}),
+    ...(appointmentAt ? { next_follow_up: appointmentAt, stage: "meeting_booked" } : {}),
   };
 
   let lead: { id: string; next_follow_up?: string | null } | null = null;
@@ -269,7 +269,7 @@ Deno.serve(async (request) => {
       leadError = error;
     } else {
       const { data, error } = await db.from("clients")
-        .insert({ ...leadFields, stage: "discovery" })
+        .insert({ ...leadFields, stage: appointmentAt ? "meeting_booked" : "discovery" })
         .select("id, next_follow_up")
         .single();
       lead = data;
@@ -277,7 +277,7 @@ Deno.serve(async (request) => {
     }
   } else {
     const { data, error } = await db.from("clients")
-      .insert({ ...leadFields, stage: "discovery" })
+      .insert({ ...leadFields, stage: appointmentAt ? "meeting_booked" : "discovery" })
       .select("id, next_follow_up")
       .single();
     lead = data;

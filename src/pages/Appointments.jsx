@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import Icon from "../components/Icon"
 import { supabase } from "../lib/supabase"
-import { formatIndiaDateTime } from "../lib/time"
+import { formatIndiaDateTime, indiaDateInputValue } from "../lib/time"
 
 const parseAppointmentTime = (message) => {
   const match = String(message || "").match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
@@ -36,7 +36,8 @@ export default function Appointments() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [query, setQuery] = useState("")
-  const [filter, setFilter] = useState("all")
+  const [filter, setFilter] = useState("upcoming")
+  const [selectedDate, setSelectedDate] = useState("")
 
   useEffect(() => {
     let active = true
@@ -53,7 +54,7 @@ export default function Appointments() {
         setError(`Could not load appointments: ${fetchError.message}`)
         setAppointments([])
       } else {
-        const leadById = new Map((leadsResult.data || []).map((lead, index) => [String(lead.id), { ...lead, listOrder: index }]))
+        const leadById = new Map((leadsResult.data || []).map((lead) => [String(lead.id), lead]))
         setAppointments((notesResult.data || []).map((note) => ({
           ...note,
           appointmentAt: parseAppointmentTime(note.note),
@@ -73,20 +74,16 @@ export default function Appointments() {
       const time = appointment.appointmentAt ? new Date(appointment.appointmentAt).getTime() : null
       if (filter === "upcoming" && (time === null || time < Date.now())) return false
       if (filter === "past" && (time === null || time >= Date.now())) return false
+      if (selectedDate && (!appointment.appointmentAt || indiaDateInputValue(appointment.appointmentAt) !== selectedDate)) return false
       if (!normalizedQuery) return true
       const haystack = [appointment.lead?.name, appointment.lead?.company, appointment.lead?.email, appointment.lead?.phone, appointment.appointmentLabel].join(" ").toLowerCase()
       return haystack.includes(normalizedQuery)
     }).sort((a, b) => {
-      const aLeadOrder = a.lead?.listOrder ?? Number.MAX_SAFE_INTEGER
-      const bLeadOrder = b.lead?.listOrder ?? Number.MAX_SAFE_INTEGER
-      if (aLeadOrder !== bLeadOrder) return aLeadOrder - bLeadOrder
       const aTime = a.appointmentAt ? new Date(a.appointmentAt).getTime() : Number.MAX_SAFE_INTEGER
       const bTime = b.appointmentAt ? new Date(b.appointmentAt).getTime() : Number.MAX_SAFE_INTEGER
       return aTime - bTime
     })
-  }, [appointments, filter, query])
-
-  const upcomingCount = appointments.filter(({ appointmentAt }) => appointmentAt && new Date(appointmentAt).getTime() >= Date.now()).length
+  }, [appointments, filter, query, selectedDate])
 
   return (
     <section>
@@ -96,9 +93,6 @@ export default function Appointments() {
           <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Appointments</h2>
           <p className="mt-2 text-sm text-slate-500">See every lead’s requested appointment in one place.</p>
         </div>
-        <div className="flex h-11 items-center gap-2 rounded-xl border border-violet-100 bg-violet-50 px-4 text-sm font-semibold text-violet-700">
-          <Icon name="calendar" size={17} /> {upcomingCount} upcoming
-        </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between sm:p-4">
@@ -106,10 +100,18 @@ export default function Appointments() {
           <Icon name="search" size={17} className="shrink-0 text-slate-400" />
           <input aria-label="Search appointments" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search lead or appointment..." className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
         </label>
-        <div className="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="Filter appointments">
-          {[{ id: "all", label: "All" }, { id: "upcoming", label: "Upcoming" }, { id: "past", label: "Past" }].map((option) => (
-            <button key={option.id} type="button" onClick={() => setFilter(option.id)} className={`rounded-md px-3 py-2 text-xs font-semibold transition ${filter === option.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{option.label}</button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500">
+            <Icon name="calendar" size={16} className="text-violet-500" />
+            <span className="sr-only">Choose appointment date</span>
+            <input aria-label="Choose appointment date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} className="bg-transparent text-sm text-slate-700 outline-none" />
+          </label>
+          {selectedDate && <button type="button" onClick={() => setSelectedDate("")} className="h-10 rounded-lg px-2 text-xs font-semibold text-violet-700 hover:bg-violet-50">Clear date</button>}
+          <div className="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="Filter appointments">
+          {[{ id: "upcoming", label: "Upcoming" }, { id: "past", label: "Past" }].map((option) => (
+              <button key={option.id} type="button" onClick={() => setFilter(option.id)} className={`rounded-md px-3 py-2 text-xs font-semibold transition ${filter === option.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{option.label}</button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -118,13 +120,13 @@ export default function Appointments() {
       ) : visibleAppointments.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
           <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Icon name="calendar" size={20} /></div>
-          <h3 className="mt-3 text-sm font-semibold text-slate-800">No appointments found</h3>
+          <h3 className="mt-3 text-sm font-semibold text-slate-800">No {filter === "upcoming" ? "upcoming" : "past"} appointments found</h3>
           <p className="mt-1 text-sm text-slate-500">Appointments requested by leads will appear here.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-5">
-            <h3 className="text-sm font-bold text-slate-900">All lead appointments</h3>
+            <h3 className="text-sm font-bold text-slate-900">{filter === "upcoming" ? "Upcoming appointments" : "Past appointments"}</h3>
             <span className="rounded-full bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">{visibleAppointments.length} shown</span>
           </div>
           <div className="divide-y divide-slate-100">
