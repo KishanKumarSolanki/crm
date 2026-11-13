@@ -296,11 +296,7 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "We could not save your enquiry. Please try again." }, 500, headers);
   }
 
-  const dueDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  const [taskResult, noteResult, activityResult] = await Promise.all([
-    isNewLead
-      ? db.from("tasks").insert({ client_id: lead.id, title: "Follow up with new lead", due_date: dueDate, status: "pending" })
-      : Promise.resolve({ error: null }),
+  const [noteResult, activityResult] = await Promise.all([
     boundedText(body.message, 2000)
       ? db.from("notes").insert({ client_id: lead.id, note: boundedText(body.message, 2000) })
       : Promise.resolve({ error: null }),
@@ -314,7 +310,6 @@ Deno.serve(async (request) => {
           : "Lead updated their institute details",
     }),
   ]);
-  if (taskResult.error) console.error("Lead follow-up task insert failed", taskResult.error.message);
   if (noteResult.error) {
     console.error("Lead message insert failed", noteResult.error.message);
     if (formStage === "complete") return jsonResponse({ error: "Your enquiry was saved, but the completed form details could not be saved. Please submit again." }, 500, headers);

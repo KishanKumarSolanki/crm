@@ -316,7 +316,7 @@ export default function Leads() {
     try {
       const initialFollowUp = nextFollowUp
         ? indiaDateTimeInputToISOString(nextFollowUp)
-        : new Date(Date.now() + DAY_MS).toISOString()
+        : null
 
       const { data, error } = await supabase
         .from("clients")
@@ -338,15 +338,17 @@ export default function Leads() {
 
       const newLead = data[0]
 
-      const { error: taskError } = await supabase.from("tasks").insert([
-        {
-          client_id: newLead.id,
-          title: "Follow up with lead",
-          due_date: initialFollowUp,
-          status: "pending",
-        },
-      ])
-      if (taskError) console.error("Task error:", taskError)
+      if (initialFollowUp) {
+        const { error: taskError } = await supabase.from("tasks").insert([
+          {
+            client_id: newLead.id,
+            title: "Follow-up scheduled",
+            due_date: initialFollowUp,
+            status: "pending",
+          },
+        ])
+        if (taskError) console.error("Task error:", taskError)
+      }
 
       const { error: activityError } = await supabase.from("activities").insert([
         {
@@ -579,14 +581,6 @@ export default function Leads() {
           if (normalizedEmail) knownEmails.add(normalizedEmail)
           if (normalizedPhone) knownPhones.add(normalizedPhone)
           if (row.externalLeadId) knownExternalIds.add(row.externalLeadId)
-
-          const { error: taskError } = await supabase.from("tasks").insert({
-            client_id: newLead.id,
-            title: "Follow up with lead",
-            due_date: new Date(Date.now() + DAY_MS),
-            status: "pending",
-          })
-          if (taskError) console.error("Imported lead task error:", taskError)
 
           const { error: activityError } = await supabase.from("activities").insert({
             client_id: newLead.id,

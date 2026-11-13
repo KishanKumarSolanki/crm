@@ -50,6 +50,8 @@ export default function FollowUps() {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("upcoming")
   const [selectedDate, setSelectedDate] = useState("")
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [completingId, setCompletingId] = useState("")
 
   useEffect(() => {
     let active = true
@@ -78,14 +80,14 @@ export default function FollowUps() {
           .map((task) => [scheduleKey(task.client_id, task.due_date), task]))
         const rows = []
         const seen = new Set()
-        const addRow = ({ leadId, date, description, status = "Scheduled", id }) => {
+        const addRow = ({ leadId, date, description, status = "Scheduled", id, taskId = null }) => {
           if (!leadId || !date) return
           const key = scheduleKey(leadId, date)
           if (appointmentKeys.has(key) || seen.has(key)) return
           const lead = leadsById.get(String(leadId))
           if (!lead) return
           seen.add(key)
-          rows.push({ id: id || key, lead, date, description: description || "Follow-up scheduled", status })
+          rows.push({ id: id || key, lead, date, description: description || "Follow-up scheduled", status, taskId })
         }
 
         ;(activitiesResult.data || []).forEach((activity) => {
@@ -96,29 +98,51 @@ export default function FollowUps() {
             description: activity.outcome || activity.description,
             status: matchingTask?.status || "Scheduled",
             id: `activity-${activity.id}`,
+            taskId: matchingTask?.id || null,
           })
         })
 
         ;(tasksResult.data || []).forEach((task) => {
           if (!/^follow[\s-]?up\b/i.test(task.title || "")) return
+          // These generic tasks were created automatically when leads were added.
+          // They were not scheduled by a user, so keep them out of the follow-up queue.
+          if (/^follow\s+up\s+with\s+(?:new\s+)?lead$/i.test((task.title || "").trim())) return
           addRow({
             leadId: task.client_id,
             date: task.due_date,
             description: task.instructions || task.title,
             status: task.status || "Pending",
             id: `task-${task.id}`,
+            taskId: task.id,
           })
         })
 
+        // Leads explicitly moved to the Follow-up stage can have their schedule
+        // stored on the lead record instead of an activity or task.
         ;(leadsResult.data || []).forEach((lead) => {
-          if (!lead.next_follow_up) return
-          const key = scheduleKey(lead.id, lead.next_follow_up)
-          const matchingTask = tasksByKey.get(key)
-          addRow({
-            leadId: lead.id,
-            date: lead.next_follow_up,
-            description: matchingTask?.instructions || matchingTask?.title || "Follow-up scheduled",
-            status: matchingTask?.status || "Scheduled",
+          if (lead.stage !== "follow_up") return
+          if (lead.next_follow_up) {
+            const key = scheduleKey(lead.id, lead.next_follow_up)
+            const matchingTask = tasksByKey.get(key)
+            const previousRowCount = rows.length
+            addRow({
+              leadId: lead.id,
+              date: lead.next_follow_up,
+              description: matchingTask?.instructions || matchingTask?.title || "Follow-up scheduled",
+              status: matchingTask?.status || "Scheduled",
+              taskId: matchingTask?.id || null,
+            })
+            if (rows.length > previousRowCount) return
+          }
+          if (rows.some((row) => String(row.lead.id) === String(lead.id))) return
+          const leadRecord = leadsById.get(String(lead.id))
+          if (!leadRecord) return
+          rows.push({
+            id: `stage-${lead.id}`,
+            lead: leadRecord,
+            date: null,
+            description: "Follow-up needed",
+            status: "Needs scheduling",
           })
         })
 
@@ -128,19 +152,48 @@ export default function FollowUps() {
     }
     loadFollowUps()
     return () => { active = false }
-  }, [])
+  }, [refreshKey])
+
+  const markFollowUpComplete = async (followUp) => {
+    setCompletingId(String(followUp.id))
+    setError("")
+    const result = followUp.taskId
+      ? await supabase.from("tasks").update({ status: "completed" }).eq("id", followUp.taskId)
+      : await supabase.from("tasks").insert({
+          client_id: followUp.lead.id,
+          title: "Follow-up completed",
+          instructions: followUp.description,
+          due_date: followUp.date || new Date().toISOString(),
+          status: "completed",
+        })
+    if (result.error) {
+      setError(`Could not complete follow-up: ${result.error.message}`)
+    } else {
+      setRefreshKey((key) => key + 1)
+    }
+    setCompletingId("")
+  }
 
   const visibleFollowUps = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
     return followUps.filter((lead) => {
-      const time = new Date(lead.date).getTime()
-      if (filter === "upcoming" && time < Date.now()) return false
-      if (filter === "past" && time >= Date.now()) return false
-      if (selectedDate && indiaDateInputValue(lead.date) !== selectedDate) return false
+      const time = lead.date ? new Date(lead.date).getTime() : null
+      if (!lead.date && filter === "past") return false
+      const isActiveFollowUpLead = lead.lead.stage === "follow_up"
+      const isCompleted = String(lead.status).toLowerCase() === "completed"
+      if (isCompleted && filter === "upcoming") return false
+      if (isCompleted && filter === "past") return true
+      if (filter === "upcoming" && time !== null && time < Date.now() && !isActiveFollowUpLead) return false
+      if (filter === "past" && (isActiveFollowUpLead || (time !== null && time >= Date.now()))) return false
+      if (selectedDate && (!lead.date || indiaDateInputValue(lead.date) !== selectedDate)) return false
       if (!normalizedQuery) return true
       const haystack = [lead.lead.name, lead.lead.company, lead.lead.email, lead.lead.phone, lead.description].join(" ").toLowerCase()
       return haystack.includes(normalizedQuery)
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    }).sort((a, b) => {
+      if (!a.date) return b.date ? 1 : 0
+      if (!b.date) return -1
+      return new Date(a.date).getTime() - new Date(b.date).getTime()
+    })
   }, [followUps, filter, query, selectedDate])
 
   return (
@@ -149,7 +202,7 @@ export default function FollowUps() {
         <div>
           <p className="text-xs font-bold uppercase tracking-[.16em] text-violet-700">Lead schedule</p>
           <h2 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">Follow-ups</h2>
-          <p className="mt-2 text-sm text-slate-500">See every lead’s scheduled follow-up in one place.</p>
+          <p className="mt-2 text-sm text-slate-500">See scheduled follow-ups and leads marked for follow-up in one place.</p>
         </div>
       </div>
 
@@ -179,7 +232,7 @@ export default function FollowUps() {
         <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
           <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><Icon name="clock" size={20} /></div>
           <h3 className="mt-3 text-sm font-semibold text-slate-800">No {filter} follow-ups found</h3>
-          <p className="mt-1 text-sm text-slate-500">Scheduled follow-ups will appear here.</p>
+          <p className="mt-1 text-sm text-slate-500">Scheduled follow-ups and leads marked for follow-up will appear here.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -189,7 +242,9 @@ export default function FollowUps() {
           </div>
           <div className="divide-y divide-slate-100">
             {visibleFollowUps.map((lead) => {
-              const isUpcoming = new Date(lead.date).getTime() >= Date.now()
+              const isUnscheduled = !lead.date
+              const isOverdue = !isUnscheduled && new Date(lead.date).getTime() < Date.now() && lead.lead.stage === "follow_up"
+              const isUpcoming = !isUnscheduled && new Date(lead.date).getTime() >= Date.now()
               const isCompleted = String(lead.status).toLowerCase() === "completed"
               return (
                 <article key={lead.id} className="grid gap-3 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_minmax(240px,1fr)_auto] sm:items-center sm:px-5">
@@ -200,12 +255,24 @@ export default function FollowUps() {
                   <div className="flex min-w-0 items-start gap-2 text-sm text-slate-700">
                     <Icon name="clock" size={16} className="mt-0.5 shrink-0 text-violet-500" />
                     <span className="min-w-0">
-                      <span className="block font-medium">{formatIndiaDateTime(lead.date, { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                      <span className="block font-medium">{lead.date ? formatIndiaDateTime(lead.date, { weekday: "short", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "Date not set"}</span>
                       <span className="mt-1 block break-words text-xs text-slate-600">Follow-up: {lead.description}</span>
-                      <span className="mt-1 block truncate text-xs text-slate-400">{lead.lead.stage ? stageLabels[lead.lead.stage] || lead.lead.stage.replaceAll("_", " ") : "Stage unavailable"} · India Standard Time (GMT+5:30)</span>
+                      <span className="mt-1 block truncate text-xs text-slate-400">{lead.lead.stage ? stageLabels[lead.lead.stage] || lead.lead.stage.replaceAll("_", " ") : "Stage unavailable"}{lead.date ? " · India Standard Time (GMT+5:30)" : ""}</span>
                     </span>
                   </div>
-                  <span className={`w-fit rounded-full px-2.5 py-1 text-[11px] font-semibold ${isCompleted ? "bg-slate-100 text-slate-500" : isUpcoming ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{isCompleted ? "Completed" : isUpcoming ? "Upcoming" : "Past"}</span>
+                  <div className="flex w-fit items-center gap-2">
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isCompleted ? "bg-slate-100 text-slate-500" : isUnscheduled ? "bg-amber-50 text-amber-700" : isOverdue ? "bg-rose-50 text-rose-700" : isUpcoming ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>{isCompleted ? "Completed" : isUnscheduled ? "Needs scheduling" : isOverdue ? "Overdue" : isUpcoming ? "Upcoming" : "Past"}</span>
+                    {isOverdue && !isCompleted && (
+                      <button
+                        type="button"
+                        onClick={() => markFollowUpComplete(lead)}
+                        disabled={completingId === String(lead.id)}
+                        className="rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {completingId === String(lead.id) ? "Saving…" : "Complete"}
+                      </button>
+                    )}
+                  </div>
                 </article>
               )
             })}
