@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import readXlsxFile from "read-excel-file/browser"
 import { supabase } from "../lib/supabase"
-import { Link } from "react-router-dom"
+import { Link, useSearchParams } from "react-router-dom"
 import { ToastContainer, toast } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import Icon from "../components/Icon"
@@ -90,16 +90,21 @@ const formatShortDateTime = (value) =>
     : "—"
 
 const LEAD_CATEGORIES = [
+  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
   { id: "igs", label: "Institute Growth System", aliases: ["igs", "institute growth system"] },
   { id: "dm", label: "Digital Marketing", aliases: ["dm", "digital marketing"] },
-  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
   { id: "lms", label: "LMS", aliases: ["lms"] },
   { id: "ncf", label: "NCF", aliases: ["ncf"] },
 ]
 
 const categoryForLead = (lead) => {
-  const source = lead.lead_source?.trim().toLowerCase()
-  return LEAD_CATEGORIES.find((category) => category.aliases.includes(source))?.id || null
+  const source = String(lead.lead_source || "").trim().toLowerCase().replace(/[_-]+/g, " ")
+  if (/\bigs\b|institute growth system/.test(source)) return "igs"
+  if (/landing pages?/.test(source)) return "landing-page"
+  if (/\bdm\b|digital marketing/.test(source)) return "dm"
+  if (/\blms\b/.test(source)) return "lms"
+  if (/\bncf\b/.test(source)) return "ncf"
+  return LEAD_CATEGORIES.find((category) => category.aliases.some((alias) => source.includes(alias)))?.id || null
 }
 
 const leadDateBounds = (period) => {
@@ -231,10 +236,22 @@ export default function Leads() {
   const [deletingLead, setDeletingLead] = useState(false)
   const importFileRef = useRef(null)
 
+  const [searchParams, setSearchParams] = useSearchParams()
   const [search, setSearch] = useState("")
-  const [stageFilter, setStageFilter] = useState("all")
-  const [leadCategory, setLeadCategory] = useState("all")
+  const [stageFilter, setStageFilter] = useState(() => searchParams.get("stage") || "all")
+  const [leadCategory, setLeadCategory] = useState(() => searchParams.get("category") || "all")
   const [dateFilter, setDateFilter] = useState("all")
+
+  useEffect(() => {
+    const categoryParam = searchParams.get("category")
+    if (categoryParam) {
+      setLeadCategory(categoryParam)
+    }
+    const stageParam = searchParams.get("stage")
+    if (stageParam) {
+      setStageFilter(stageParam)
+    }
+  }, [searchParams])
 
   useEffect(() => {
     if (!leadToDelete || deletingLead) return
@@ -1128,6 +1145,15 @@ export default function Leads() {
                 aria-selected={selected}
                 onClick={() => {
                   setLeadCategory(category.id)
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev)
+                    if (category.id === "all") {
+                      next.delete("category")
+                    } else {
+                      next.set("category", category.id)
+                    }
+                    return next
+                  })
                 }}
                 className={`relative inline-flex shrink-0 items-center gap-2 px-3.5 py-2.5 text-sm font-semibold transition ${
                   selected ? "text-indigo-700" : "text-slate-500 hover:text-slate-800"

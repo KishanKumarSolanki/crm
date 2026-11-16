@@ -9,12 +9,12 @@ import {
   Draggable,
 } from "@hello-pangea/dnd";
 
-const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "active", "in_revision", "delivered"];
+const stages = ["discovery", "contacted", "qualified", "meeting_booked", "follow_up", "signed", "delivered"];
 const stageLabels = { discovery: "New Lead", contacted: "Contacted", qualified: "Qualified", meeting_booked: "Meeting Booked", follow_up: "Follow-up", signed: "Closed & Signed", active: "In Progress", in_revision: "In Revision", delivered: "Delivered" };
 const leadCategories = [
+  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
   { id: "igs", label: "Institute Growth System", aliases: ["igs", "institute growth system"] },
   { id: "dm", label: "Digital Marketing", aliases: ["dm", "digital marketing"] },
-  { id: "landing-page", label: "Landing Page", aliases: ["landing page", "landing-page"] },
   { id: "lms", label: "LMS", aliases: ["lms"] },
   { id: "ncf", label: "NCF", aliases: ["ncf"] },
 ];

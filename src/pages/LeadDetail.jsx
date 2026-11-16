@@ -661,123 +661,79 @@ export default function LeadDetail() {
         ))}
       </div>
 
-      {/* CONVERSATION + ATTRIBUTION */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <SectionCard
-          className="xl:col-span-2"
-          title="Log a conversation"
-          subtitle="Record the discussion and schedule the next follow-up."
-          action={
-            lead.next_follow_up ? (
-              <span className="shrink-0 rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">
-                Next: {formatDate(lead.next_follow_up)}
-              </span>
-            ) : null
-          }
-        >
-          <form onSubmit={addConversation} className="grid grid-cols-1 gap-4 p-5 sm:p-6 md:grid-cols-2">
-            <div>
-              <label className={labelClass} htmlFor="conv-method">Contact method</label>
-              <select
-                id="conv-method"
-                className={`${inputClass} cursor-pointer`}
-                value={conversationMethod}
-                onChange={(e) => setConversationMethod(e.target.value)}
-              >
-                {CONTACT_METHODS.map((method) => (
-                  <option key={method} value={method}>
-                    {capitalize(method)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className={labelClass} htmlFor="conv-followup">Next follow-up</label>
-              <input
-                id="conv-followup"
-                type="datetime-local"
-                className={inputClass}
-                value={conversationFollowUp}
-                onChange={(e) => setConversationFollowUp(e.target.value)}
-              />
-              <p className="mt-1 text-[10px] text-slate-400">India Standard Time (GMT+5:30)</p>
-            </div>
-
-            <div className="md:col-span-2">
-              <label className={labelClass} htmlFor="conv-text">Discussion</label>
-              <textarea
-                id="conv-text"
-                className={`${inputClass} h-auto min-h-[96px] resize-y py-2.5`}
-                placeholder="What did you discuss with the lead?"
-                value={conversationText}
-                onChange={(e) => setConversationText(e.target.value)}
-                required
-                maxLength={3000}
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className={labelClass} htmlFor="conv-outcome">Outcome / follow-up note</label>
-              <input
-                id="conv-outcome"
-                className={inputClass}
-                value={conversationOutcome}
-                onChange={(e) => setConversationOutcome(e.target.value)}
-                placeholder="Decision, next step, or reminder"
-                maxLength={1000}
-              />
-            </div>
-
-            <div className="flex justify-end md:col-span-2">
-              <button type="submit" disabled={savingConversation} className={btnPrimary}>
-                {savingConversation ? "Saving..." : "Save conversation"}
-              </button>
-            </div>
-          </form>
-        </SectionCard>
-
-        <SectionCard
-          title="Lead details & marketing"
-          subtitle="First-step contact details and captured campaign data"
-        >
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 p-5 sm:p-6">
-            {sourceFields.map((field) => (
-              <div key={field.label} className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{field.label}</p>
-                <p className="mt-1 truncate text-sm font-medium text-slate-700" title={field.value || ""}>
-                  {field.value || "—"}
-                </p>
-              </div>
-            ))}
+      {/* CONVERSATION */}
+      <SectionCard
+        title="Log a conversation"
+        subtitle="Record the discussion and schedule the next follow-up."
+        action={
+          lead.next_follow_up ? (
+            <span className="shrink-0 rounded-full bg-violet-50 px-3 py-1 text-[11px] font-semibold text-violet-700 ring-1 ring-violet-100">
+              Next: {formatDate(lead.next_follow_up)}
+            </span>
+          ) : null
+        }
+      >
+        <form onSubmit={addConversation} className="grid grid-cols-1 gap-4 p-5 sm:p-6 md:grid-cols-2">
+          <div>
+            <label className={labelClass} htmlFor="conv-method">Contact method</label>
+            <select
+              id="conv-method"
+              className={`${inputClass} cursor-pointer`}
+              value={conversationMethod}
+              onChange={(e) => setConversationMethod(e.target.value)}
+            >
+              {CONTACT_METHODS.map((method) => (
+                <option key={method} value={method}>
+                  {capitalize(method)}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <form
-            onSubmit={updateRevenue}
-            className="border-t border-slate-100 bg-slate-50/60 p-5 sm:p-6"
-          >
-            <label className={labelClass} htmlFor="revenue">Confirmed sale amount (INR)</label>
-            <div className="flex gap-2">
-              <input
-                id="revenue"
-                type="number"
-                min="0"
-                step="0.01"
-                className={inputClass}
-                value={revenueAmount}
-                onChange={(e) => setRevenueAmount(e.target.value)}
-                placeholder="Leave blank until sale"
-              />
-              <button type="submit" disabled={savingRevenue} className={`${btnGhost} h-10 shrink-0`}>
-                {savingRevenue ? "Saving…" : "Save"}
-              </button>
-            </div>
-            <p className="mt-2 text-[11px] text-slate-400">
-              Add the confirmed amount to make revenue and ROAS reports useful.
-            </p>
-          </form>
-        </SectionCard>
-      </div>
+          <div>
+            <label className={labelClass} htmlFor="conv-followup">Next follow-up</label>
+            <input
+              id="conv-followup"
+              type="datetime-local"
+              className={inputClass}
+              value={conversationFollowUp}
+              onChange={(e) => setConversationFollowUp(e.target.value)}
+            />
+            <p className="mt-1 text-[10px] text-slate-400">India Standard Time (GMT+5:30)</p>
+          </div>
+
+          <div className="md:col-span-2">
+            <label className={labelClass} htmlFor="conv-text">Discussion</label>
+            <textarea
+              id="conv-text"
+              className={`${inputClass} h-auto min-h-[96px] resize-y py-2.5`}
+              placeholder="What did you discuss with the lead?"
+              value={conversationText}
+              onChange={(e) => setConversationText(e.target.value)}
+              required
+              maxLength={3000}
+            />
+          </div>
+
+          <div className="md:col-span-2">
+            <label className={labelClass} htmlFor="conv-outcome">Outcome / follow-up note</label>
+            <input
+              id="conv-outcome"
+              className={inputClass}
+              value={conversationOutcome}
+              onChange={(e) => setConversationOutcome(e.target.value)}
+              placeholder="Decision, next step, or reminder"
+              maxLength={1000}
+            />
+          </div>
+
+          <div className="flex justify-end md:col-span-2">
+            <button type="submit" disabled={savingConversation} className={btnPrimary}>
+              {savingConversation ? "Saving..." : "Save conversation"}
+            </button>
+          </div>
+        </form>
+      </SectionCard>
 
       {/* CONVERSATION HISTORY FOR THIS LEAD ONLY */}
       <SectionCard
