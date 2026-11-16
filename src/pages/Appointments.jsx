@@ -3,9 +3,10 @@ import { Link } from "react-router-dom"
 import Icon from "../components/Icon"
 import { supabase } from "../lib/supabase"
 import { formatIndiaDateTime, indiaDateInputValue } from "../lib/time"
+import { leadCategoryForSource, sourceCategoryOptions } from "../lib/leadCategory"
 
 const parseAppointmentTime = (message) => {
-  const match = String(message || "").match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
+  const match = String(message || "").match(/(?:Appointment Requested|Appointment):\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
   if (!match) return null
   const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText] = match
   const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(monthText.toLowerCase())
@@ -29,7 +30,7 @@ const parseAppointmentTime = (message) => {
   return new Date(localDate.getTime() - offsetMinutes * 60_000).toISOString()
 }
 
-const appointmentText = (note) => String(note || "").match(/Appointment Requested:\s*(.+)/i)?.[1]?.trim() || "Appointment details unavailable"
+const appointmentText = (note) => String(note || "").match(/(?:Appointment Requested|Appointment):\s*(.+)/i)?.[1]?.trim() || "Appointment details unavailable"
 
 export default function Appointments() {
   const [appointments, setAppointments] = useState([])
@@ -38,6 +39,7 @@ export default function Appointments() {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("upcoming")
   const [selectedDate, setSelectedDate] = useState("")
+  const [category, setCategory] = useState("all")
 
   useEffect(() => {
     let active = true
@@ -45,8 +47,8 @@ export default function Appointments() {
       setLoading(true)
       setError("")
       const [notesResult, leadsResult] = await Promise.all([
-        supabase.from("notes").select("id,client_id,note,created_at").ilike("note", "%Appointment Requested:%").order("created_at", { ascending: false }),
-        supabase.from("clients").select("id,name,email,phone,company,stage,created_at").order("created_at", { ascending: false }),
+        supabase.from("notes").select("id,client_id,note,created_at").or("note.ilike.%Appointment Requested:%,note.ilike.%Appointment:%").order("created_at", { ascending: false }),
+        supabase.from("clients").select("id,name,email,phone,company,stage,created_at,next_follow_up,lead_source").order("created_at", { ascending: false }),
       ])
       if (!active) return
       const fetchError = notesResult.error || leadsResult.error
@@ -55,12 +57,29 @@ export default function Appointments() {
         setAppointments([])
       } else {
         const leadById = new Map((leadsResult.data || []).map((lead) => [String(lead.id), lead]))
-        setAppointments((notesResult.data || []).map((note) => ({
+        const appointmentRows = (notesResult.data || []).map((note) => ({
           ...note,
-          appointmentAt: parseAppointmentTime(note.note),
+          appointmentAt: parseAppointmentTime(note.note) || leadById.get(String(note.client_id))?.next_follow_up || null,
           appointmentLabel: appointmentText(note.note),
           lead: leadById.get(String(note.client_id)) || null,
-        })))
+        }))
+        const appointmentKeys = new Set(appointmentRows.map((appointment) => appointment.lead && appointment.appointmentAt
+          ? `${appointment.lead.id}:${new Date(appointment.appointmentAt).getTime()}`
+          : null).filter(Boolean))
+        ;(leadsResult.data || []).forEach((lead) => {
+          if (lead.stage !== "meeting_booked" || !lead.next_follow_up) return
+          const key = `${lead.id}:${new Date(lead.next_follow_up).getTime()}`
+          if (appointmentKeys.has(key)) return
+          appointmentKeys.add(key)
+          appointmentRows.push({
+            id: `lead-appointment-${lead.id}`,
+            client_id: lead.id,
+            appointmentAt: lead.next_follow_up,
+            appointmentLabel: "Appointment",
+            lead,
+          })
+        })
+        setAppointments(appointmentRows)
       }
       setLoading(false)
     }
@@ -72,6 +91,7 @@ export default function Appointments() {
     const normalizedQuery = query.trim().toLowerCase()
     return appointments.filter((appointment) => {
       const time = appointment.appointmentAt ? new Date(appointment.appointmentAt).getTime() : null
+      if (category !== "all" && leadCategoryForSource(appointment.lead?.lead_source) !== category) return false
       if (filter === "upcoming" && (time === null || time < Date.now())) return false
       if (filter === "past" && (time === null || time >= Date.now())) return false
       if (selectedDate && (!appointment.appointmentAt || indiaDateInputValue(appointment.appointmentAt) !== selectedDate)) return false
@@ -83,7 +103,7 @@ export default function Appointments() {
       const bTime = b.appointmentAt ? new Date(b.appointmentAt).getTime() : Number.MAX_SAFE_INTEGER
       return aTime - bTime
     })
-  }, [appointments, filter, query, selectedDate])
+  }, [appointments, filter, query, selectedDate, category])
 
   return (
     <section>
@@ -100,6 +120,9 @@ export default function Appointments() {
           <Icon name="search" size={17} className="shrink-0 text-slate-400" />
           <input aria-label="Search appointments" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search lead or appointment..." className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
         </label>
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="Filter appointments by source">
+          {sourceCategoryOptions.map((option) => <button key={option.id} type="button" onClick={() => setCategory(option.id)} aria-pressed={category === option.id} className={`rounded-md px-3 py-2 text-xs font-semibold transition ${category === option.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{option.label}</button>)}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500">
             <Icon name="calendar" size={16} className="text-violet-500" />

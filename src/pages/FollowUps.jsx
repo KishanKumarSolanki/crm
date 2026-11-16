@@ -3,6 +3,7 @@ import { Link } from "react-router-dom"
 import Icon from "../components/Icon"
 import { supabase } from "../lib/supabase"
 import { formatIndiaDateTime, indiaDateInputValue } from "../lib/time"
+import { leadCategoryForSource, sourceCategoryOptions } from "../lib/leadCategory"
 
 const stageLabels = {
   discovery: "New Lead",
@@ -17,7 +18,7 @@ const stageLabels = {
 }
 
 const parseAppointmentTime = (message) => {
-  const match = String(message || "").match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
+  const match = String(message || "").match(/(?:Appointment Requested|Appointment):\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
   if (!match) return null
   const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText] = match
   const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"].indexOf(monthText.toLowerCase())
@@ -50,6 +51,7 @@ export default function FollowUps() {
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState("upcoming")
   const [selectedDate, setSelectedDate] = useState("")
+  const [category, setCategory] = useState("all")
   const [refreshKey, setRefreshKey] = useState(0)
   const [completingId, setCompletingId] = useState("")
 
@@ -59,10 +61,10 @@ export default function FollowUps() {
       setLoading(true)
       setError("")
       const [leadsResult, tasksResult, activitiesResult, notesResult] = await Promise.all([
-        supabase.from("clients").select("id,name,email,phone,company,stage,next_follow_up"),
+        supabase.from("clients").select("id,name,email,phone,company,stage,next_follow_up,lead_source"),
         supabase.from("tasks").select("id,client_id,title,due_date,instructions,status").not("due_date", "is", null).order("due_date", { ascending: true }),
         supabase.from("activities").select("id,client_id,description,outcome,follow_up_at").not("follow_up_at", "is", null).order("follow_up_at", { ascending: true }),
-        supabase.from("notes").select("client_id,note").ilike("note", "%Appointment Requested:%"),
+        supabase.from("notes").select("client_id,note").or("note.ilike.%Appointment Requested:%,note.ilike.%Appointment:%"),
       ])
       if (!active) return
       const fetchError = [leadsResult.error, tasksResult.error, activitiesResult.error, notesResult.error].find(Boolean)
@@ -178,6 +180,7 @@ export default function FollowUps() {
     const normalizedQuery = query.trim().toLowerCase()
     return followUps.filter((lead) => {
       const time = lead.date ? new Date(lead.date).getTime() : null
+      if (category !== "all" && leadCategoryForSource(lead.lead.lead_source) !== category) return false
       if (!lead.date && filter === "past") return false
       const isActiveFollowUpLead = lead.lead.stage === "follow_up"
       const isCompleted = String(lead.status).toLowerCase() === "completed"
@@ -194,7 +197,7 @@ export default function FollowUps() {
       if (!b.date) return -1
       return new Date(a.date).getTime() - new Date(b.date).getTime()
     })
-  }, [followUps, filter, query, selectedDate])
+  }, [followUps, filter, query, selectedDate, category])
 
   return (
     <section>
@@ -211,6 +214,9 @@ export default function FollowUps() {
           <Icon name="search" size={17} className="shrink-0 text-slate-400" />
           <input aria-label="Search follow-ups" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search lead or company..." className="w-full bg-transparent text-sm outline-none placeholder:text-slate-400" />
         </label>
+        <div className="flex gap-1 rounded-lg bg-slate-100 p-1" aria-label="Filter follow-ups by source">
+          {sourceCategoryOptions.map((option) => <button key={option.id} type="button" onClick={() => setCategory(option.id)} aria-pressed={category === option.id} className={`rounded-md px-3 py-2 text-xs font-semibold transition ${category === option.id ? "bg-white text-violet-700 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}>{option.label}</button>)}
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex h-10 items-center gap-2 rounded-lg border border-slate-200 px-3 text-xs font-medium text-slate-500">
             <Icon name="calendar" size={16} className="text-violet-500" />

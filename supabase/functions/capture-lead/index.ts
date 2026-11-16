@@ -5,10 +5,10 @@ const boundedText = (value: unknown, max: number) =>
   typeof value === "string" ? value.trim().slice(0, max) : "";
 
 const parseAppointmentTime = (message: string) => {
-  const match = message.match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i);
+  const match = message.match(/(?:Appointment Requested|Appointment):\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*(?:\(([^)]*)\))?(?:\s*\(([^)]*)\))?/i);
   if (!match) return null;
 
-  const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText] = match;
+  const [, dayText, monthText, yearText, hourText, minuteText, meridiem, zoneText, extraZoneText] = match;
   const month = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
     .indexOf(monthText.toLowerCase());
   if (month < 0) return null;
@@ -19,7 +19,7 @@ const parseAppointmentTime = (message: string) => {
   const minute = Number(minuteText);
   if (day < 1 || day > 31 || hour12 < 1 || hour12 > 12 || minute > 59) return null;
 
-  const zone = zoneText.trim();
+  const zone = `${zoneText || ""} ${extraZoneText || ""}`.trim();
   let offsetMinutes: number;
   if (/\bIST\b|India Standard Time/i.test(zone)) {
     offsetMinutes = 330;
@@ -33,6 +33,32 @@ const parseAppointmentTime = (message: string) => {
   const localDate = new Date(Date.UTC(year, month, day, hour, minute));
   if (localDate.getUTCFullYear() !== year || localDate.getUTCMonth() !== month || localDate.getUTCDate() !== day) return null;
   return new Date(localDate.getTime() - offsetMinutes * 60_000).toISOString();
+};
+
+const normalizeAppointmentTime = (value: unknown) => {
+  if (typeof value !== "string" || !value.trim()) return null;
+  const timestamp = Date.parse(value.trim());
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+};
+
+const sameTimestamp = (left: string | null | undefined, right: string | null | undefined) =>
+  Boolean(left && right && Date.parse(left) === Date.parse(right));
+
+const appointmentNote = (appointmentAt: string) => {
+  const appointment = new Date(appointmentAt);
+  const date = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(appointment);
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  }).format(appointment);
+  return `Appointment Requested: ${date} at ${time} (India Standard Time)`;
 };
 
 const formatAppointmentForWhatsApp = (appointmentAt: string) => {
@@ -212,7 +238,10 @@ Deno.serve(async (request) => {
   const attribution = (body.attribution && typeof body.attribution === "object")
     ? body.attribution as Record<string, unknown>
     : {};
-  const appointmentAt = parseAppointmentTime(boundedText(body.message, 2000));
+  // Accept the legacy landing page's human-readable appointment text and the
+  // structured ISO timestamp used by external booking forms such as IGS.
+  const appointmentAt = normalizeAppointmentTime(body.appointment_at)
+    || parseAppointmentTime(boundedText(body.message, 2000));
   const consent = body.marketing_consent === true;
 
   const submittedAt = Number(body.submitted_at || 0);
@@ -241,26 +270,38 @@ Deno.serve(async (request) => {
   let lead: { id: string; next_follow_up?: string | null } | null = null;
   let leadError: { code?: string; message: string } | null = null;
   let isNewLead = true;
+  let isNewAppointmentBooking = false;
+  let formWasAlreadyCompleted = false;
 
   if (externalLeadId) {
     const { data: existingLead, error: existingLeadError } = await db.from("clients")
-      .select("id, form_completed_at")
+      .select("id, form_completed_at, next_follow_up, stage, appointment_whatsapp_confirmed_for")
       .eq("external_lead_id", externalLeadId)
       .maybeSingle();
     if (existingLeadError) return jsonResponse({ error: "Could not verify this enquiry." }, 500, headers);
     // Stage 1 creates the CRM record. On final submission, update that same row
-    // rather than creating a duplicate lead. Repeated completed submissions are idempotent.
-    if (existingLead && formStage === "complete" && existingLead.form_completed_at) {
+    // rather than creating a duplicate lead. Repeated completed submissions are idempotent,
+    // while a later meeting booking can still update the lead and send its confirmation.
+    if (existingLead && formStage === "complete" && existingLead.form_completed_at && !appointmentAt) {
       return jsonResponse({ ok: true, duplicate: true }, 200, headers);
     }
 
     if (existingLead) {
       isNewLead = false;
+      formWasAlreadyCompleted = Boolean(existingLead.form_completed_at);
+      isNewAppointmentBooking = Boolean(
+        appointmentAt &&
+        (
+          existingLead.stage !== "meeting_booked" ||
+          !sameTimestamp(existingLead.next_follow_up, appointmentAt) ||
+          !sameTimestamp(existingLead.appointment_whatsapp_confirmed_for, appointmentAt)
+        ),
+      );
       const updateFields = Object.fromEntries(
         Object.entries(leadFields).filter(([key, value]) => value !== null || key === "marketing_consent"),
       );
       let updateQuery = db.from("clients").update(updateFields).eq("id", existingLead.id);
-      if (formStage === "complete") updateQuery = updateQuery.is("form_completed_at", null);
+      if (formStage === "complete" && !existingLead.form_completed_at) updateQuery = updateQuery.is("form_completed_at", null);
       const { data, error } = await updateQuery.select("id, next_follow_up").maybeSingle();
       if (!error && !data && formStage === "complete") {
         return jsonResponse({ ok: true, duplicate: true }, 200, headers);
@@ -268,6 +309,7 @@ Deno.serve(async (request) => {
       lead = data;
       leadError = error;
     } else {
+      isNewAppointmentBooking = Boolean(appointmentAt);
       const { data, error } = await db.from("clients")
         .insert({ ...leadFields, stage: appointmentAt ? "meeting_booked" : "discovery" })
         .select("id, next_follow_up")
@@ -276,6 +318,7 @@ Deno.serve(async (request) => {
       leadError = error;
     }
   } else {
+    isNewAppointmentBooking = Boolean(appointmentAt);
     const { data, error } = await db.from("clients")
       .insert({ ...leadFields, stage: appointmentAt ? "meeting_booked" : "discovery" })
       .select("id, next_follow_up")
@@ -296,9 +339,13 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "We could not save your enquiry. Please try again." }, 500, headers);
   }
 
+  const submittedMessage = boundedText(body.message, 2000);
+  const savedNote = appointmentAt && !/Appointment Requested:/i.test(submittedMessage)
+    ? [submittedMessage, appointmentNote(appointmentAt)].filter(Boolean).join("\n")
+    : submittedMessage;
   const [noteResult, activityResult] = await Promise.all([
-    boundedText(body.message, 2000)
-      ? db.from("notes").insert({ client_id: lead.id, note: boundedText(body.message, 2000) })
+    savedNote
+      ? db.from("notes").insert({ client_id: lead.id, note: savedNote })
       : Promise.resolve({ error: null }),
     db.from("activities").insert({
       client_id: lead.id,
@@ -317,7 +364,7 @@ Deno.serve(async (request) => {
   if (activityResult.error) console.error("Lead activity insert failed", activityResult.error.message);
 
   let completedFormNow = false;
-  if (formStage === "complete") {
+  if (formStage === "complete" && !formWasAlreadyCompleted) {
     const { data: completedLead, error: completionError } = await db.from("clients")
       .update({ form_completed_at: new Date().toISOString() })
       .eq("id", lead.id)
@@ -332,12 +379,18 @@ Deno.serve(async (request) => {
     completedFormNow = true;
   }
   let whatsappMessageSent = false;
-  if (completedFormNow && appointmentAt && phone) {
+  if ((completedFormNow || isNewAppointmentBooking) && appointmentAt && phone) {
     whatsappMessageSent = await sendAppointmentConfirmation({
       name,
       phone,
       appointmentAt,
     });
+    if (whatsappMessageSent) {
+      const { error: confirmationError } = await db.from("clients")
+        .update({ appointment_whatsapp_confirmed_for: appointmentAt })
+        .eq("id", lead.id);
+      if (confirmationError) console.error("WhatsApp appointment confirmation marker failed.", confirmationError.message);
+    }
   }
 
   // Trigger ChatVerse WhatsApp CRM flow for new leads and form submissions
