@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { Link } from "react-router-dom"
 import { supabase } from "../lib/supabase"
 import Icon from "../components/Icon"
-import { formatIndiaDateTime, indiaDateInputValue, parseDateTime } from "../lib/time"
+import { formatIndiaDateTime, INDIA_TIME_ZONE, indiaDateInputValue, parseDateTime } from "../lib/time"
 
 // =========================
 // CONSTANTS
@@ -103,6 +103,27 @@ const formatDateTime = (value) => {
   })
 }
 
+// "2026-11" key (India time) from a created_at value
+const monthKeyOf = (value) => {
+  const d = parseDateTime(value)
+  return d ? indiaDateInputValue(d).slice(0, 7) : null
+}
+
+const dayKeyOf = (value) => {
+  const d = parseDateTime(value)
+  return d ? indiaDateInputValue(d) : null
+}
+
+// "2026-11" -> "November 2026"
+const monthLabelOf = (key) => {
+  const [year, month] = key.split("-").map(Number)
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString("en-IN", {
+    month: "long",
+    year: "numeric",
+    timeZone: "UTC",
+  })
+}
+
 const parseAppointmentTime = (message) => {
   const match = String(message || "").match(/Appointment Requested:\s*(?:[A-Za-z]+,\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+at\s+(\d{1,2}):(\d{2})\s*(AM|PM)\s*\(([^)]*)\)/i)
   if (!match) return null
@@ -135,6 +156,20 @@ const formatAppointmentTime = (value) => formatIndiaDateTime(value, {
   hour: "2-digit",
   minute: "2-digit",
 })
+
+const formatCompactAppointmentTime = (value) => {
+  const date = parseDateTime(value)
+  return date
+    ? date.toLocaleString("en-IN", {
+        timeZone: INDIA_TIME_ZONE,
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h12",
+      })
+    : ""
+}
 
 const isOverdue = (value) => {
   const d = parseDateTime(value)
@@ -243,9 +278,8 @@ const SkeletonBlock = ({ className = "" }) => (
 
 const LoadingState = () => (
   <div className="space-y-6">
-    <SkeletonBlock className="h-24" />
+    <SkeletonBlock className="h-56" />
     <div className="space-y-3 sm:space-y-4">
-      <SkeletonBlock className="h-40" />
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {[0, 1].map((i) => (
           <SkeletonBlock key={i} className="h-36" />
@@ -260,37 +294,63 @@ const LoadingState = () => (
   </div>
 )
 
-const TotalLeadsCard = ({ total, categories }) => (
-  <div className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 sm:p-5">
-    <div
-      className="absolute -right-8 -top-8 h-28 w-28 rounded-full bg-indigo-500 opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12]"
-    />
+const TotalLeadsCard = ({ total, categories, months, selectedMonth, onMonthChange }) => (
+  <div className="group relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 sm:p-8">
+    <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-indigo-500 opacity-[0.08] blur-2xl transition group-hover:opacity-[0.14]" />
+    <div className="absolute -bottom-16 left-1/4 h-40 w-40 rounded-full bg-violet-400 opacity-[0.06] blur-3xl" />
 
-    <div className="relative grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.7fr)] items-center gap-3 sm:gap-6">
-      <Link to="/leads" className="min-w-0 text-inherit no-underline group/title block">
-        <div className="flex items-center gap-1.5">
-          <span className="truncate text-[10px] font-semibold text-slate-500 transition group-hover/title:text-indigo-600 sm:text-[13px]">Total Leads</span>
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100 sm:h-8 sm:w-8">
-            <Icon name="leads" size={13} />
-          </span>
+    <div className="relative">
+      {/* TITLE */}
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+          <Icon name="leads" size={16} />
+        </span>
+        <span className="text-sm font-semibold text-slate-500 sm:text-base">Total Leads</span>
+      </div>
+
+      {/* NUMBER (left) + MONTH FILTER (right) */}
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-5xl font-bold tracking-tight text-slate-900 sm:text-6xl">{total}</p>
+          <Link to="/leads" className="mt-2 inline-block text-xs font-medium text-slate-400 no-underline transition hover:text-indigo-600">
+            All leads in CRM →
+          </Link>
         </div>
-        <p className="mt-1 text-2xl font-bold tracking-tight text-slate-900 sm:mt-2 sm:text-3xl">{total}</p>
-        <p className="mt-1 text-[9px] font-medium text-slate-400 group-hover/title:text-indigo-600 sm:text-[11px]">All leads in CRM →</p>
-      </Link>
 
-      <div className="min-w-0 space-y-1.5">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="leads-month-filter" className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            Filter by month
+          </label>
+          <select
+            id="leads-month-filter"
+            value={selectedMonth}
+            onChange={(e) => onMonthChange(e.target.value)}
+            className="h-10 w-44 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:w-52"
+          >
+            <option value="all">All months</option>
+            {months.map((m) => (
+              <option key={m.key} value={m.key}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* CATEGORY BREAKDOWN */}
+      <div className="mt-5 space-y-2">
         {categories.map((category, index) => (
           <Link
             key={category.id}
             to={`/leads?category=${category.id}`}
-            className={`flex min-w-0 items-center justify-between gap-2 rounded-lg border px-2 py-1.5 text-inherit no-underline transition hover:scale-[1.01] hover:shadow-sm sm:px-3 sm:py-2 ${
+            className={`flex min-w-0 items-center justify-between gap-3 rounded-xl border px-4 py-3 text-inherit no-underline transition hover:scale-[1.01] hover:shadow-sm sm:py-3.5 ${
               index === 0
                 ? "border-indigo-100/80 bg-indigo-50/50 hover:border-indigo-200 hover:bg-indigo-100/70"
                 : "border-slate-100 bg-slate-50/70 hover:border-slate-200 hover:bg-slate-100"
             }`}
           >
-            <span className="truncate text-[9px] font-semibold text-slate-600 sm:text-[11px]">{category.label}</span>
-            <span className="shrink-0 text-sm font-bold leading-none text-slate-900 sm:text-base">{category.count}</span>
+            <span className="truncate text-xs font-semibold text-slate-600 sm:text-sm">{category.label}</span>
+            <span className="shrink-0 text-lg font-bold leading-none text-slate-900 sm:text-xl">{category.count}</span>
           </Link>
         ))}
       </div>
@@ -298,60 +358,74 @@ const TotalLeadsCard = ({ total, categories }) => (
   </div>
 )
 
-const StatCard = ({ label, value, icon, accent, helper, progress, compact = false }) => (
-  <div className={`group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 ${compact ? "p-3 sm:px-5 sm:py-3" : "p-3 sm:p-5"}`}>
-    <div
-      className={`absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12] ${accent.glow}`}
-    />
+const StatCard = ({ label, value, icon, accent, helper, progress, compact = false, to }) => {
+  const content = (
+    <>
+      <div
+        className={`absolute -right-8 -top-8 h-28 w-28 rounded-full opacity-[0.07] blur-2xl transition group-hover:opacity-[0.12] ${accent.glow}`}
+      />
 
-    {compact ? (
-      <>
-        <div className="relative flex items-center gap-3">
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 ${accent.chip}`}>
-            <Icon name={icon} size={15} />
-          </div>
-          <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="truncate text-[11px] font-semibold text-slate-500 sm:text-[13px]">{label}</p>
-              <p className="truncate text-[10px] font-medium text-slate-400">{helper}</p>
+      {compact ? (
+        <>
+          <div className="relative flex items-center gap-3">
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 ${accent.chip}`}>
+              <Icon name={icon} size={15} />
             </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{value}</span>
+            <div className="flex min-w-0 flex-1 items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate text-[11px] font-semibold text-slate-500 sm:text-[13px]">{label}</p>
+                <p className="truncate text-[10px] font-medium text-slate-400">{helper}</p>
+              </div>
+              <span className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">{value}</span>
+            </div>
           </div>
-        </div>
-        <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-          <div
-            className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${accent.bar}`}
-            style={{ width: `${Math.min(progress, 100)}%` }}
-          />
-        </div>
-      </>
-    ) : (
-      <>
-        <div className="relative flex items-start justify-between">
-          <span className="text-[11px] font-semibold text-slate-500 sm:text-[13px]">{label}</span>
-          <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-10 sm:w-10 ${accent.chip}`}>
-            <Icon name={icon} size={16} />
-          </div>
-        </div>
-
-        <div className="relative mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:mt-4 sm:text-3xl">{value}</div>
-
-        <div className="relative mt-2 sm:mt-3">
-          <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 sm:text-[11px]">
-            <span className="truncate">{helper}</span>
-            <span>{progress}%</span>
-          </div>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="relative mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-100">
             <div
               className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${accent.bar}`}
               style={{ width: `${Math.min(progress, 100)}%` }}
             />
           </div>
-        </div>
-      </>
-    )}
-  </div>
-)
+        </>
+      ) : (
+        <>
+          <div className="relative flex items-start justify-between">
+            <span className="text-[11px] font-semibold text-slate-500 sm:text-[13px]">{label}</span>
+            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-10 sm:w-10 ${accent.chip}`}>
+              <Icon name={icon} size={16} />
+            </div>
+          </div>
+
+          <div className="relative mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:mt-4 sm:text-3xl">{value}</div>
+
+          <div className="relative mt-2 sm:mt-3">
+            <div className="mb-1.5 flex items-center justify-between gap-1 text-[10px] font-medium text-slate-400 sm:text-[11px]">
+              <span className="truncate">{helper}</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div
+                className={`h-full rounded-full bg-gradient-to-r transition-all duration-700 ${accent.bar}`}
+                style={{ width: `${Math.min(progress, 100)}%` }}
+              />
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  )
+
+  const className = `group relative block overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 hover:border-slate-300 ${to ? "cursor-pointer no-underline text-inherit" : ""} ${compact ? "p-3 sm:px-5 sm:py-3" : "p-3 sm:p-5"}`
+
+  if (to) {
+    return (
+      <Link to={to} className={className}>
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={className}>{content}</div>
+}
 
 const ActivityCounter = ({ config, count, active, onClick }) => (
   <button
@@ -387,6 +461,8 @@ export default function Dashboard() {
   const [activities, setActivities] = useState([])
   const [appointmentNotes, setAppointmentNotes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [selectedMonth, setSelectedMonth] = useState("all")
+  const [selectedLeadDate, setSelectedLeadDate] = useState("")
   const [activityPeriod, setActivityPeriod] = useState("all")
   const [activityKind, setActivityKind] = useState("all")
 
@@ -426,22 +502,54 @@ export default function Dashboard() {
   // DERIVED DATA
   // =========================
 
-  const stats = useMemo(() => {
-    const totalLeads = leads.length
-    const categoryCounts = [
+  // Months that have leads, newest first (for the month filter)
+  const leadMonths = useMemo(() => {
+    const keys = new Set()
+    leads.forEach((lead) => {
+      const key = monthKeyOf(lead.created_at)
+      if (key) keys.add(key)
+    })
+    return [...keys]
+      .sort((a, b) => (a < b ? 1 : -1))
+      .map((key) => ({ key, label: monthLabelOf(key) }))
+  }, [leads])
+
+  // Leads filtered by the selected month
+  const filteredLeads = useMemo(
+    () =>
+      selectedMonth === "all"
+        ? leads
+        : leads.filter((lead) => monthKeyOf(lead.created_at) === selectedMonth),
+    [leads, selectedMonth]
+  )
+
+  const recentLeads = useMemo(
+    () =>
+      selectedLeadDate
+        ? leads.filter((lead) => dayKeyOf(lead.created_at) === selectedLeadDate)
+        : leads,
+    [leads, selectedLeadDate]
+  )
+
+  const categoryCounts = useMemo(() => {
+    const counts = [
       { id: "igs", label: "IGS Landing Page", count: 0 },
       { id: "landing-page", label: "Landing Page", count: 0 },
       { id: "dm", label: "Digital Marketing", count: 0 },
     ]
 
-    leads.forEach((lead) => {
+    filteredLeads.forEach((lead) => {
       const source = String(lead.lead_source || "").trim().toLowerCase().replace(/[_-]+/g, " ")
-      if (/\bigs\b|institute growth system/.test(source)) categoryCounts[0].count += 1
-      else if (/landing pages?/.test(source)) categoryCounts[1].count += 1
-      else if (/\bdm\b|digital marketing/.test(source)) categoryCounts[2].count += 1
+      if (/\bigs\b|institute growth system/.test(source)) counts[0].count += 1
+      else if (/landing pages?/.test(source)) counts[1].count += 1
+      else if (/\bdm\b|digital marketing/.test(source)) counts[2].count += 1
     })
 
-    categoryCounts.sort((a, b) => b.count - a.count)
+    return counts.sort((a, b) => b.count - a.count)
+  }, [filteredLeads])
+
+  const stats = useMemo(() => {
+    const totalLeads = leads.length
     const activeLeads = leads.filter((l) => l.stage === "signed" || l.stage === "active").length
     const deliveredLeads = leads.filter((l) => l.stage === "delivered").length
     const pendingTasks = tasks.filter((t) => t.status !== "completed").length
@@ -449,7 +557,6 @@ export default function Dashboard() {
 
     return {
       totalLeads,
-      categoryCounts,
       activeLeads,
       deliveredLeads,
       pendingTasks,
@@ -517,7 +624,6 @@ export default function Dashboard() {
     [periodActivities, activityKind]
   )
 
-
   // =========================
   // RENDER
   // =========================
@@ -537,6 +643,7 @@ export default function Dashboard() {
       icon: "pipeline",
       helper: "Closed & Signed",
       progress: stats.activePct,
+      to: "/leads?stage=active",
       accent: {
         chip: "bg-emerald-50 text-emerald-600 ring-emerald-100",
         bar: "from-emerald-500 to-teal-500",
@@ -549,6 +656,7 @@ export default function Dashboard() {
       icon: "tasks",
       helper: "Completed projects",
       progress: stats.deliveredPct,
+      to: "/leads?stage=delivered",
       accent: {
         chip: "bg-blue-50 text-blue-600 ring-blue-100",
         bar: "from-blue-500 to-sky-500",
@@ -561,6 +669,7 @@ export default function Dashboard() {
       icon: "tasks",
       helper: "Needs attention",
       progress: stats.pendingPct,
+      to: "/tasks?status=pending",
       accent: {
         chip: "bg-amber-50 text-amber-600 ring-amber-100",
         bar: "from-amber-400 to-orange-500",
@@ -586,47 +695,17 @@ export default function Dashboard() {
 
   return (
     <div className="w-full space-y-6 text-slate-900">
-      {/* HEADER */}
-      <header className="relative overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04)] sm:p-8">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-gradient-to-br from-indigo-400/20 to-violet-400/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-56 w-56 rounded-full bg-gradient-to-tr from-sky-300/15 to-emerald-300/10 blur-3xl" />
-
-        <div className="relative flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-indigo-600 ring-1 ring-indigo-100">
-              <span className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
-              CRM Overview
-            </span>
-            <h1 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Dashboard</h1>
-            <p className="mt-1.5 max-w-xl text-sm text-slate-500">
-              Keep track of your leads, tasks and team activity in one place.
-            </p>
-          </div>
-
-          <div className="flex gap-2.5 max-sm:w-full">
-            <Link
-              to="/leads"
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-center text-sm font-semibold text-slate-700 no-underline shadow-sm transition hover:border-slate-300 hover:bg-slate-50 sm:flex-none"
-            >
-              View Leads
-            </Link>
-            <Link
-              to="/leads"
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 px-4 py-2.5 text-sm font-semibold text-white no-underline shadow-md shadow-indigo-500/25 transition hover:-translate-y-px hover:shadow-lg hover:shadow-indigo-500/30 sm:flex-none"
-            >
-              <Icon name="plus" size={16} />
-              Add Lead
-            </Link>
-          </div>
-        </div>
-      </header>
+      {/* TOTAL LEADS + MONTH FILTER */}
+      <TotalLeadsCard
+        total={filteredLeads.length}
+        categories={categoryCounts}
+        months={leadMonths}
+        selectedMonth={selectedMonth}
+        onMonthChange={setSelectedMonth}
+      />
 
       {/* STATS */}
       <div className="space-y-3 sm:space-y-4">
-        <TotalLeadsCard
-          total={stats.totalLeads}
-          categories={stats.categoryCounts}
-        />
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           {statCards.slice(0, 2).map((card) => (
             <StatCard key={card.label} {...card} />
@@ -634,6 +713,65 @@ export default function Dashboard() {
         </div>
         <StatCard {...statCards[2]} compact />
       </div>
+
+      <SectionCard
+        title="Recent Leads"
+        subtitle={`${recentLeads.length} lead${recentLeads.length === 1 ? "" : "s"} ${selectedLeadDate ? "on selected day" : "in CRM, newest first"}`}
+        action={
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-[11px] font-medium text-slate-500">
+                Day
+                <input
+                  type="date"
+                  value={selectedLeadDate}
+                  onChange={(event) => setSelectedLeadDate(event.target.value)}
+                  className="h-8 w-[132px] rounded-lg border border-slate-200 bg-white px-2 text-xs text-slate-600 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
+                />
+              </label>
+              {selectedLeadDate && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeadDate("")}
+                  className="rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  All days
+                </button>
+              )}
+            </div>
+            <ActionLink to="/leads">View all →</ActionLink>
+          </div>
+        }
+      >
+        {recentLeads.length === 0 ? (
+          <EmptyState icon="leads">
+            {selectedLeadDate ? "No leads were added on this day." : "No leads found."}
+          </EmptyState>
+        ) : (
+          <div className="-mx-2 flex max-h-[360px] flex-col overflow-y-auto overscroll-contain pr-1">
+            {recentLeads.map((lead) => (
+              <Link
+                key={lead.id}
+                to={`/lead/${lead.id}`}
+                className="group flex items-center gap-3.5 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50 max-sm:gap-2.5"
+              >
+                <Avatar name={lead.name} seed={lead.id} size="sm" />
+
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-slate-900">{lead.name}</p>
+                  <p className="truncate text-xs text-slate-400">{lead.company || lead.email || "—"}</p>
+                </div>
+
+                <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 md:inline-flex">
+                  {STAGE_LABEL[lead.stage] || (lead.stage ? lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1) : "Unknown")}
+                </span>
+
+                <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
+              </Link>
+            ))}
+          </div>
+        )}
+      </SectionCard>
 
       {/* FOLLOW-UP + QUICK ACTIONS */}
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
@@ -655,29 +793,37 @@ export default function Dashboard() {
                   <Link
                     key={lead.id}
                     to={`/lead/${lead.id}`}
-                    className="group flex flex-wrap items-center gap-3 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50 sm:gap-4"
+                    className="group flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50 sm:flex-nowrap sm:gap-4"
                   >
-                    <Avatar name={lead.name} seed={lead.id} size="sm" />
+                    <div className="flex min-w-0 basis-full items-center gap-3 sm:basis-auto sm:flex-1">
+                      <Avatar name={lead.name} seed={lead.id} size="sm" />
 
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{lead.name}</p>
-                      <p className="truncate text-xs text-slate-500">
-                        {[lead.company, lead.service_name, lead.lead_source].filter(Boolean).join(" · ") || "No company or service details"}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="break-words text-sm font-semibold text-slate-900 sm:truncate">{lead.name}</p>
+                        <p className="truncate text-xs text-slate-500">
+                          {[lead.company, lead.service_name, lead.lead_source].filter(Boolean).join(" · ") || "No company or service details"}
+                        </p>
+                      </div>
+                      <span className="ml-auto text-slate-300 sm:hidden">→</span>
                     </div>
 
                     <span
-                      className={`ml-auto shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 ${
+                      className={`ml-11 shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold leading-4 ring-1 sm:ml-auto sm:px-2.5 sm:py-1 sm:text-[11px] sm:leading-normal ${
                         overdue
                           ? "bg-red-50 text-red-600 ring-red-100"
                           : "bg-indigo-50 text-indigo-700 ring-indigo-100"
                       }`}
                     >
-                      {overdue ? "Overdue · " : lead.dashboardFollowUpAt ? "Scheduled · " : ""}
-                      {dueLabel}
+                      <span className="sm:hidden">
+                        {lead.dashboardFollowUpAt ? formatCompactAppointmentTime(lead.dashboardFollowUpAt) : "Follow-up needed"}
+                      </span>
+                      <span className="hidden sm:inline">
+                        {overdue ? "Overdue · " : lead.dashboardFollowUpAt ? "Scheduled · " : ""}
+                        {dueLabel}
+                      </span>
                     </span>
 
-                    <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
+                    <span className="hidden text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500 sm:inline">→</span>
                   </Link>
                 )
               })}
@@ -685,7 +831,7 @@ export default function Dashboard() {
           )}
         </SectionCard>
 
-        <SectionCard title="Quick Actions" subtitle="Common CRM actions">
+        <SectionCard title="Quick Actions" subtitle="Common CRM actions" className="hidden sm:block">
           <div className="flex flex-col gap-2">
             {quickActions.map((action) => (
               <Link
@@ -707,29 +853,28 @@ export default function Dashboard() {
         </SectionCard>
       </div>
 
-      {/* ACTIVITY + RECENT LEADS */}
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
-        <SectionCard
-          title="Activity"
-          subtitle="New leads and stage changes"
-          action={
-            <select
-              aria-label="Filter activity by date"
-              value={activityPeriod}
-              onChange={(e) => {
-                setActivityPeriod(e.target.value)
-                setActivityKind("all")
-              }}
-              className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
-            >
-              <option value="all">Recent</option>
-              <option value="today">Today</option>
-              <option value="yesterday">Yesterday</option>
-              <option value="this_week">This week</option>
-              <option value="last_week">Last week</option>
-            </select>
-          }
-        >
+      {/* ACTIVITY */}
+      <SectionCard
+        title="Activity"
+        subtitle="New leads and stage changes"
+        action={
+          <select
+            aria-label="Filter activity by date"
+            value={activityPeriod}
+            onChange={(e) => {
+              setActivityPeriod(e.target.value)
+              setActivityKind("all")
+            }}
+            className="h-8 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-medium text-slate-600 outline-none transition focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10"
+          >
+            <option value="all">Recent</option>
+            <option value="today">Today</option>
+            <option value="yesterday">Yesterday</option>
+            <option value="this_week">This week</option>
+            <option value="last_week">Last week</option>
+          </select>
+        }
+      >
           {/* COUNTERS */}
           <div className="mb-4 grid grid-cols-2 gap-2.5">
             {ACTIVITY_COUNTERS.map((counter) => (
@@ -776,44 +921,7 @@ export default function Dashboard() {
               ))}
             </ol>
           )}
-        </SectionCard>
-
-        <SectionCard
-          className="xl:col-span-2"
-          title="Recent Leads"
-          subtitle="Latest leads added to your CRM"
-          action={<ActionLink to="/leads">View all →</ActionLink>}
-        >
-          {leads.length === 0 ? (
-            <EmptyState icon="leads">No leads found.</EmptyState>
-          ) : (
-            <div className="-mx-2 flex flex-col">
-              {leads.slice(0, 5).map((lead) => {
-                return (
-                  <Link
-                    key={lead.id}
-                    to={`/lead/${lead.id}`}
-                    className="group flex items-center gap-3.5 rounded-xl px-2 py-3 text-inherit no-underline transition hover:bg-slate-50 max-sm:gap-2.5"
-                  >
-                    <Avatar name={lead.name} seed={lead.id} size="sm" />
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-900">{lead.name}</p>
-                      <p className="truncate text-xs text-slate-400">{lead.company || lead.email || "—"}</p>
-                    </div>
-
-                    <span className="hidden shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 ring-1 ring-slate-200 md:inline-flex">
-                      {STAGE_LABEL[lead.stage] || (lead.stage ? lead.stage.charAt(0).toUpperCase() + lead.stage.slice(1) : "Unknown")}
-                    </span>
-
-                    <span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500">→</span>
-                  </Link>
-                )
-              })}
-            </div>
-          )}
-        </SectionCard>
-      </div>
+      </SectionCard>
     </div>
   )
 }

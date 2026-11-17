@@ -167,8 +167,14 @@ const Avatar = ({ name, seed, size = "md" }) => {
   )
 }
 
-const StatCard = ({ label, value, icon, chip }) => (
-  <div className={`${cardClass} group flex items-center gap-4 p-4 transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5`}>
+const StatCard = ({ label, value, icon, chip, active = false, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`${cardClass} group flex w-full items-center gap-4 p-4 text-left transition hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-900/5 ${
+      active ? "border-indigo-400 ring-2 ring-indigo-500/20" : ""
+    }`}
+  >
     <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${chip}`}>
       <Icon name={icon} size={18} />
     </div>
@@ -176,7 +182,7 @@ const StatCard = ({ label, value, icon, chip }) => (
       <p className="text-xs font-medium text-slate-500">{label}</p>
       <p className="mt-0.5 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
     </div>
-  </div>
+  </button>
 )
 
 const SkeletonBlock = ({ className = "" }) => (
@@ -244,13 +250,9 @@ export default function Leads() {
 
   useEffect(() => {
     const categoryParam = searchParams.get("category")
-    if (categoryParam) {
-      setLeadCategory(categoryParam)
-    }
+    setLeadCategory(categoryParam || "all")
     const stageParam = searchParams.get("stage")
-    if (stageParam) {
-      setStageFilter(stageParam)
-    }
+    setStageFilter(stageParam || "all")
   }, [searchParams])
 
   useEffect(() => {
@@ -779,7 +781,11 @@ export default function Leads() {
         lead.name?.toLowerCase().includes(query) ||
         lead.email?.toLowerCase().includes(query) ||
         lead.company?.toLowerCase().includes(query)
-      const matchesStage = stageFilter === "all" || lead.stage === stageFilter
+      const matchesStage =
+        stageFilter === "all" ||
+        (stageFilter === "active"
+          ? lead.stage === "active" || lead.stage === "signed"
+          : lead.stage === stageFilter)
       return matchesCategory && matchesDate && matchesSearch && matchesStage
     })
   }, [leads, leadCategory, dateBounds, search, stageFilter])
@@ -806,10 +812,10 @@ export default function Leads() {
   }[dateFilter]
 
   const statCards = [
-    { label: "Total Leads", value: stats.total, icon: "leads", chip: "bg-indigo-50 text-indigo-600 ring-indigo-100" },
-    { label: "New Leads", value: stats.discovery, icon: "plus", chip: "bg-orange-50 text-orange-600 ring-orange-100" },
-    { label: "Active", value: stats.active, icon: "pipeline", chip: "bg-emerald-50 text-emerald-600 ring-emerald-100" },
-    { label: "Delivered", value: stats.delivered, icon: "tasks", chip: "bg-blue-50 text-blue-600 ring-blue-100" },
+    { label: "Total Leads", value: stats.total, icon: "leads", chip: "bg-indigo-50 text-indigo-600 ring-indigo-100", stage: "all" },
+    { label: "New Leads", value: stats.discovery, icon: "plus", chip: "bg-orange-50 text-orange-600 ring-orange-100", stage: "discovery" },
+    { label: "Active", value: stats.active, icon: "pipeline", chip: "bg-emerald-50 text-emerald-600 ring-emerald-100", stage: "active" },
+    { label: "Delivered", value: stats.delivered, icon: "tasks", chip: "bg-blue-50 text-blue-600 ring-blue-100", stage: "delivered" },
   ]
 
   // =========================
@@ -914,7 +920,22 @@ export default function Leads() {
       {/* STATS */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
         {statCards.map((card) => (
-          <StatCard key={card.label} {...card} />
+          <StatCard
+            key={card.label}
+            {...card}
+            active={stageFilter === card.stage}
+            onClick={() => {
+              const target = stageFilter === card.stage ? "all" : card.stage
+              setStageFilter(target)
+              const newParams = new URLSearchParams(searchParams)
+              if (target === "all") {
+                newParams.delete("stage")
+              } else {
+                newParams.set("stage", target)
+              }
+              setSearchParams(newParams)
+            }}
+          />
         ))}
       </div>
 
@@ -1208,6 +1229,13 @@ export default function Leads() {
                 value={stageFilter}
                 onChange={(e) => {
                   setStageFilter(e.target.value)
+                  const newParams = new URLSearchParams(searchParams)
+                  if (e.target.value === "all") {
+                    newParams.delete("stage")
+                  } else {
+                    newParams.set("stage", e.target.value)
+                  }
+                  setSearchParams(newParams)
                 }}
                 className="h-10 min-w-0 flex-1 cursor-pointer rounded-xl border border-slate-200 bg-white px-2 text-xs text-slate-600 outline-none focus:border-indigo-300 focus:ring-4 focus:ring-indigo-500/10 sm:px-3 sm:text-sm"
               >

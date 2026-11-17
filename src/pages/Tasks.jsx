@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
 import { formatIndiaDate, indiaDateInputValue, indiaDateTimeInputToISOString, parseDateTime } from "../lib/time";
@@ -11,6 +11,8 @@ const dateInputValue = (value) => {
 };
 
 export default function Tasks() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedStatus = searchParams.get("status");
   const [tasks, setTasks] = useState([]);
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +25,19 @@ export default function Tasks() {
   const [dueDate, setDueDate] = useState("");
   const [priority, setPriority] = useState("normal");
   const [instructions, setInstructions] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [error, setError] = useState("");
+
+  const statusFilter =
+    requestedStatus === "pending" || requestedStatus === "completed" ? requestedStatus : "all";
+
+  const updateStatusFilter = (status) => {
+    setSearchParams((currentParams) => {
+      const nextParams = new URLSearchParams(currentParams);
+      if (status === "all") nextParams.delete("status");
+      else nextParams.set("status", status);
+      return nextParams;
+    });
+  };
 
   const loadTaskRecords = useCallback(() => Promise.all([
       supabase
@@ -371,7 +384,7 @@ export default function Tasks() {
           </div>
           <label className="flex items-center gap-2 text-xs font-medium text-slate-600">
             Show
-            <select className="h-9 rounded-lg border border-slate-200 bg-white px-2" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+            <select className="h-9 rounded-lg border border-slate-200 bg-white px-2" value={statusFilter} onChange={(event) => updateStatusFilter(event.target.value)}>
               <option value="all">All statuses</option>
               <option value="pending">Pending</option>
               <option value="completed">Completed</option>
