@@ -72,7 +72,7 @@ Before using the panel:
 | `WHATSAPP_ACCESS_TOKEN` | WhatsApp | Meta access token with WhatsApp messaging permission |
 | `WHATSAPP_PHONE_NUMBER_ID` | WhatsApp | Registered Cloud API phone number ID |
 | `WHATSAPP_GRAPH_API_VERSION` | WhatsApp | Graph API version enabled for your Meta app, e.g. `vXX.0` |
-| `CHATVERSE_API_KEY` | Lead confirmation | ChatVerse API key used server-side for lead-confirmation messages |
+| `CHATVERSE_API_KEY` | Lead confirmation | ChatVerse API key used server-side for the approved lead WhatsApp template |
 | `CHATVERSE_KEY` | WhatsApp panel | Separate ChatVerse embed API key used server-side to create a launch path; never expose it in frontend environment variables |
 | `WHATSAPP_APP_SECRET` | WhatsApp status callbacks | Meta app secret used to verify webhook signatures |
 | `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | WhatsApp webhook setup | A long random token you choose for webhook verification |
@@ -84,7 +84,7 @@ Supabase supplies `SUPABASE_URL` and the server-side key to deployed Edge Functi
 
 The worker spaces EmailJS requests at least 1.1 seconds apart across concurrent workers to respect its [documented one-request-per-second limit](https://www.emailjs.com/docs/rest-api/send/). It uses EmailJS's [multipart send endpoint](https://www.emailjs.com/docs/rest-api/send-form/) for campaign attachments. EmailJS acceptance is recorded as `sent`; this integration does not receive EmailJS delivery, bounce, open, or click callbacks, so email delivery analytics are not available in the panel. EmailJS does not provide an idempotency key here, so ambiguous timeout/server errors are not retried automatically; check the EmailJS dashboard history before retrying those messages. WhatsApp delivery/read statuses continue to come from Meta callbacks. The Campaign history tab has a **Process queue** action for queued work after the worker is deployed; the scheduled queue cron is still needed for automatic scheduling and retries.
 
-Set the separate `CHATVERSE_KEY` once in Supabase Dashboard → Edge Function Secrets. Keep `CHATVERSE_API_KEY` for lead-confirmation messages; the WhatsApp panel uses `CHATVERSE_KEY` to request a fresh launch path from the `chatverse-launch` Edge Function. Neither key is entered in the CRM or sent to the browser. Ensure `PUBLIC_SITE_URL` or `PUBLIC_SITE_URLS` includes the CRM's deployed origin for the Edge Function CORS allowlist.
+Set `CHATVERSE_API_KEY` and the separate `CHATVERSE_KEY` in Supabase Dashboard → Edge Function Secrets. Lead submissions use `CHATVERSE_API_KEY` to send the approved `new_template` WhatsApp message; the WhatsApp panel uses `CHATVERSE_KEY` to request a fresh launch path from the `chatverse-launch` Edge Function. Neither key is entered in the CRM or sent to the browser. Ensure `PUBLIC_SITE_URL` or `PUBLIC_SITE_URLS` includes the CRM's deployed origin for the Edge Function CORS allowlist.
 
 Deploy the worker and callback functions after setting secrets:
 
@@ -93,6 +93,7 @@ supabase functions deploy process-broadcast-queue
 supabase functions deploy unsubscribe-broadcast
 supabase functions deploy whatsapp-broadcast-webhook
 supabase functions deploy chatverse-launch
+supabase functions deploy send-lead-template
 ```
 
 Configure provider callbacks:
@@ -127,7 +128,7 @@ The composer limits uploads to 10 MB each (five files for email and one supporte
 
 ## Landing page, attribution, and Meta events
 
-- The public lead-capture page is `/landing`. It records first-touch UTM values and, after optional marketing consent, Meta click/browser identifiers. Leads are created through the `capture-lead` Supabase Edge Function so the public form does not need direct database insert access. Each lead also gets an activity, a next-day follow-up task and an optional project note. After a completed form submission with a phone number and requested appointment, `capture-lead` sets the lead stage to `meeting_booked` and sends the `new_lead_received` WhatsApp template in `en_US` with the lead's name, requested date, and time. External booking forms such as the IGS landing page can use the same function; send `appointment_at` as an ISO 8601 timestamp, `lead_source: "IGS"`, and a stable `external_lead_id` to apply the same stage and WhatsApp behavior. The older `message` value containing `Appointment Requested: ...` remains supported. When an admin or manager moves a lead into `Contacted`, configured EmailJS sends the welcome email once; the timestamp is stored on the lead.
+- The public lead-capture page is `/landing`. It records first-touch UTM values and, after optional marketing consent, Meta click/browser identifiers. Leads are created through the `capture-lead` Supabase Edge Function so the public form does not need direct database insert access. New leads and completed forms with a phone number send the ChatVerse `new_template` WhatsApp message in `en_US`; a requested appointment additionally sends the `new_lead_received` appointment confirmation with the lead's name, requested date, and time. Each lead also gets an activity, a next-day follow-up task and an optional project note. External booking forms such as the IGS landing page can use the same function; send `appointment_at` as an ISO 8601 timestamp, `lead_source: "IGS"`, and a stable `external_lead_id` to apply the same stage and WhatsApp behavior. The older `message` value containing `Appointment Requested: ...` remains supported. When an admin or manager moves a lead into `Contacted`, configured EmailJS sends the welcome email once; the timestamp is stored on the lead.
 - The signed-in admin Marketing page is `/marketing`. Add ad spend by campaign and date there. Use the same campaign spelling in the landing link's `utm_campaign`; record each sale amount on that lead's detail page for revenue and ROAS.
 - The database trigger queues `Lead`, `QualifiedLead`, `Schedule`, and `Purchase` events when a lead gave marketing consent. Stage names are `qualified`, `meeting_booked`, and `signed` respectively. Browser Pixel and server CAPI share the lead event ID for deduplication.
 - Deploy both functions with the project: `supabase functions deploy capture-lead` and `supabase functions deploy process-meta-events`. The `supabase/config.toml` disables JWT verification only for the public capture function; it validates the request itself and checks the configured origin allowlist.

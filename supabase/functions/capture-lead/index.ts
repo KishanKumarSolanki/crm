@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendNewLeadTemplate } from "../_shared/chatverse.ts";
 import { corsHeaders, jsonResponse } from "../_shared/cors.ts";
 
 const boundedText = (value: unknown, max: number) =>
@@ -138,42 +139,12 @@ const sendAppointmentConfirmation = async (args: {
   }
 };
 
-const CHATVERSE_CRM_WEBHOOK_URL = Deno.env.get("CHATVERSE_CRM_WEBHOOK_URL") ||
-  "https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T";
-
-const sendLeadToChatVerseTrigger = async (args: {
-  name: string;
-  phone: string;
-  email?: string | null;
-}) => {
-  if (!args.phone) return false;
-  let recipient = args.phone.replace(/\D/g, "");
-  if (recipient.length === 10) {
-    const countryCode = (Deno.env.get("CHATVERSE_DEFAULT_COUNTRY_CODE") || "91").replace(/\D/g, "");
-    recipient = `${countryCode}${recipient}`;
-  }
-  if (recipient.length < 10 || recipient.length > 15) {
-    console.warn("ChatVerse CRM trigger skipped: lead phone is not a valid international number.");
-    return false;
-  }
-
+const sendLeadToChatVerseTemplate = async (phone: string) => {
   try {
-    const response = await fetch(CHATVERSE_CRM_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: args.name,
-        phone: recipient,
-        email: args.email || "",
-      }),
-    });
-    if (!response.ok) {
-      console.warn("ChatVerse CRM trigger webhook returned status:", response.status);
-      return false;
-    }
+    await sendNewLeadTemplate(phone);
     return true;
   } catch (error) {
-    console.error("ChatVerse CRM trigger webhook failed:", error instanceof Error ? error.message : "Unknown error");
+    console.error("ChatVerse lead template failed:", error instanceof Error ? error.message : "Unknown error");
     return false;
   }
 };
@@ -393,14 +364,10 @@ Deno.serve(async (request) => {
     }
   }
 
-  // Trigger ChatVerse WhatsApp CRM flow for new leads and form submissions
+  // Send the approved ChatVerse template for new leads and completed forms.
   if ((isNewLead || completedFormNow) && phone) {
-    const triggerSent = await sendLeadToChatVerseTrigger({
-      name,
-      phone,
-      email,
-    });
-    if (triggerSent) {
+    const templateSent = await sendLeadToChatVerseTemplate(phone);
+    if (templateSent) {
       whatsappMessageSent = true;
     }
   }

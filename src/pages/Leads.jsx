@@ -378,27 +378,26 @@ export default function Leads() {
       ])
       if (activityError) console.error("Activity error:", activityError)
 
-      // ChatVerse CRM Trigger: naye lead par automated WhatsApp flow trigger karna
+      let whatsappError = ""
       if (newLead.phone) {
-        let recipientPhone = String(newLead.phone).replace(/\D/g, "")
-        if (recipientPhone.length === 10) {
-          recipientPhone = `91${recipientPhone}`
+        const { error: sendError } = await supabase.functions.invoke("send-lead-template", {
+          body: { phone: newLead.phone },
+        })
+        if (sendError) {
+          whatsappError = sendError.message
+          console.error("ChatVerse lead template error:", sendError)
         }
-        fetch("https://api.chatverse.io/whatsapp/crm-triggers/hook/kWzlRoiI8DXSDQNZQx12tDNGYpKXrq3T", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: newLead.name,
-            phone: recipientPhone,
-            email: newLead.email || "",
-          }),
-        }).catch((err) => console.error("ChatVerse trigger error:", err))
       }
 
       resetForm()
       await fetchLeads()
       setShowAddLead(false)
-      alert("Lead added. The welcome email will be sent when you move it to Contacted.")
+      if (whatsappError) {
+        alert(`Lead added, but the WhatsApp template could not be sent: ${whatsappError}`)
+      } else {
+        const status = newLead.phone ? "Lead added. WhatsApp template sent." : "Lead added."
+        alert(`${status} The welcome email will be sent when you move it to Contacted.`)
+      }
     } catch (err) {
       alert(err.message)
     } finally {
