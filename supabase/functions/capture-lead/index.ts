@@ -364,8 +364,8 @@ Deno.serve(async (request) => {
     }
   }
 
-  // Send the approved ChatVerse template for new leads and completed forms.
-  if ((isNewLead || completedFormNow) && phone) {
+  // Send the approved ChatVerse template once, after the form is completed.
+  if (completedFormNow && phone) {
     const templateSent = await sendLeadToChatVerseTemplate(phone);
     if (templateSent) {
       whatsappMessageSent = true;
